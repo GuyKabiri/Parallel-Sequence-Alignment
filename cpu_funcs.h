@@ -19,11 +19,17 @@
 #define DASH    '-'
 
 int compare_evaluate_seq(char* seq1, char* seq2, double* weights, int offset, char* signs);      //  signs array is for debugging and pretty printing
+double evaluate_chars(char a, char b, double* weights, char* s);
 char* is_contain(const char* s, const char c);
 int is_conservative(const char c1, const char c2);
 int is_semi_conservative(const char c1, const char c2);
 // int read_seq_and_weights_from_file(FILE* file, char* seq1, char* seq2, double* weights, int* type);
 ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data);
 void print_seq(char* seq1, char* seq2, double* weights, int offset);
+
+int find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max);
+char maximize(char c1, char c2, double* weights);
+char minimize(char c1, char c2, double* weights);
+
 
 #endif //__CPU_FUNCS_H__
