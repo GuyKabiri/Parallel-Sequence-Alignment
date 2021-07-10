@@ -1,7 +1,9 @@
 #ifndef __DEF_H__
 #define __DEF_H__
 
-#define INPUT_FILE "input2.dat"
+#define INPUT_FILE "input/input2.dat"
+#define OUTPUT_FILE "output/input2.dat"
+
 
 #define CONSERVATIVE_COUNT 9
 #define SEMI_CONSERVATIVE_COUNT 11

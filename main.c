@@ -1,4 +1,7 @@
-#define _CRT_SECURE_NO_WARNINGS
+// TODO: re-structure the directories, delete input, output dirs
+
+
+#define _CRT_SECURE_NO_WARNINGS             //   TODO: remove CTR_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
