@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "pair.h": "c",
+        "data.h": "c",
+        "fstream": "c",
+        "istream": "c",
+        "ostream": "c",
+        "sstream": "c"
+    }
+}
