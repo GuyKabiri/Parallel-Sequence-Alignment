@@ -12,7 +12,7 @@ char conservatives_arr[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NE
 char semi_conservatives_arr[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
 
 
-int compare_evaluate_seq(char* seq1, char* seq2, double* weights, int offset, char* signs)      //  signs array is for debugging and pretty printing
+double compare_evaluate_seq(char* seq1, char* seq2, double* weights, int offset, char* signs)      //  signs array is for debugging and pretty printing
 {
     if (!seq1 || !seq2 || !weights)  return 0;
 
@@ -22,7 +22,7 @@ int compare_evaluate_seq(char* seq1, char* seq2, double* weights, int offset, ch
     int iterations = fmin(strlen(seq2), strlen(seq1) - offset);        // TODO: change fmin with min
     char _sign;
     // double t = MPI_Wtime();
-#pragma omp parallel for
+// #pragma omp parallel for
     for ( ; seq2_idx < iterations; seq1_idx++, seq2_idx++)
     {
         // if      (seq1[seq1_idx] == seq2[seq2_idx])                      { _sign = STAR;  total_score += weights[0]; }
@@ -126,7 +126,7 @@ void print_seq(char* seq1, char* seq2, double* weights, int offset)
     for (int i = 0; i < offset; i++)    printf(" ");    //  print spaces to align the offset of sequences
     printf("%s\n", signs);       //  print signs sequence
 
-    printf("Score: %g\n", score);
+    printf("Offset: %4d, Score: %g\n", offset, score);
 }
 
 //  find the best mutant for a given offset
@@ -142,8 +142,8 @@ int find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutan
     {
         
         ch = is_max ?                                               //  if it is a maximus assignment
-            maximize(seq1[seq1_idx], seq2[seq2_idx], weights) :     //  find the maximum suitable character
-            minimize(seq1[seq1_idx], seq2[seq2_idx], weights);      //  find the minimum suitable character
+            maximize(seq1[seq1_idx], seq2[seq2_idx], weights, &total_score) :     //  find the maximum suitable character
+            minimize(seq1[seq1_idx], seq2[seq2_idx], weights, &total_score);      //  find the minimum suitable character
 
         mutant[seq2_idx] = ch;
     }
@@ -156,41 +156,52 @@ int find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutan
     therefore, if c1 and c2 are NOT conservative, miximize the equation should be by max(w1, -w3, -w4)
 */
 //  TODO:   finding a char that will evaluated as the sign SPACE and do not return SPACE
-char maximize(char c1, char c2, double* weights)
+char maximize(char c1, char c2, double* weights, double* score)
 {
-    char max_letter;                        
-    if (is_conservative(c1, c2))    return c2;      //  if the characters are conservative, substitute is not allowed   ->  return the same letter
+    if (is_conservative(c1, c2))    //  if the characters are conservative, substitute is not allowed   ->  return the same letter
+    {    
+        if (c1 == c2)               //  if same letters -> add the suitable weight
+            *score += weights[0];
+        else                        //  not same letters, but conservative ones -> substruct the suitable weight
+            *score -= weights[1];
+        return c2;      
+    }
 
     if (is_semi_conservative(c1, c2))   //  if the characters are semi conservative, then
     {
-        if      (weights[0] > -weights[2] && weights[0] > -weights[3])   return c1;     //  if w1 > w3, w4 then return START
-        else if (weights[3] > -weights[2] && weights[3] > -weights[0])   return DASH;  //  if w4 > w1, w3 then return SPACE
+        if      (weights[0] > -weights[2] && weights[0] > -weights[3])  { *score += weights[0]; return c1; }    //  if w1 > w3, w4 then return STAR
+        else if (-weights[3] > -weights[2] && -weights[3] > weights[0]) { *score -= weights[3]; return DASH; }  //  if w4 > w1, w3 then return SPACE
         return c2;                                                                      //  otherwise, return COLON (same letter, changing to other semi conservative will have no effect)
     }
 
-    //  otherwise, the characters are neither conservative, not semi conservative
+    //  otherwise, the characters are neither conservative, nor semi conservative
     //  then, maximize by max(w1, w4) which means to return c1 or SPACE
-
-    return weights[0] > -weights[3] ? c1 : DASH;
+    if (weights[0] > -weights[3])
+    {
+        *score += weights[0];
+        return c1;
+    }
+    
+    *score -= weights[3];
+    return DASH;
 }
 
 /*  
     s = w1 * n_start - w2 * n_colon - w3 * n_point - w4 * n_space
     therefore, if c1 and c2 are NOT conservative, minimize the equation should be by min(w1, -w3, -w4)
 */
-char minimize(char c1, char c2, double* weights)
-{
-    char max_letter;                        
+char minimize(char c1, char c2, double* weights, double* score)
+{                       
     if (is_conservative(c1, c2))    return c2;      //  if the characters are conservative, substitute is not allowed   ->  return the same letter
 
     if (is_semi_conservative(c1, c2))   //  if the characters are semi conservative, then
     {
-        if      (weights[0] < -weights[2] && weights[0] < -weights[3])   return c1;     //  if w1 > w3, w4 then return START
-        else if (weights[3] < -weights[2] && weights[3] < -weights[0])   return DASH;  //  if w4 > w1, w3 then return SPACE
+        if      (weights[0] < -weights[2] && weights[0] < -weights[3])      return c1;     //  if w1 > w3, w4 then return STAR
+        else if (-weights[3] < -weights[2] && -weights[3] < weights[0])   return DASH;   //  if w4 > w1, w3 then return SPACE
         return c2;                                                                      //  otherwise, return COLON (same letter, changing to other semi conservative will have no effect)
     }
 
-    //  otherwise, the characters are neither conservative, not semi conservative
+    //  otherwise, the characters are neither conservative, nor semi conservative
     //  then, minimize by min(w1, w4) which means to return c1 or SPACE
 
     return weights[0] < -weights[3] ? c1 : DASH;

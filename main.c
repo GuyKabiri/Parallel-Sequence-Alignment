@@ -46,38 +46,39 @@ int main(int argc, char* argv[])
     fclose(input_file);
     printf("%s problem\n\n", data.is_max ? MAXIMUM_FUNC : MINIMUM_FUNC);
 
-    int offset = 0;
+    // int offset = 0;
     // compare_evaluate_seq(seq1, seq2, weights, offset, NULL);
 
     // print_seq(seq1, seq2, weights, offset);
 
-    Mutant best_mutant;
-    best_mutant.score = data.is_max ? __DBL_MIN__ : __DBL_MAX__;
-    best_mutant.offset = 0;
+    // Mutant best_mutant;
+    // best_mutant.score = data.is_max ? __DBL_MIN__ : __DBL_MAX__;
+    // best_mutant.offset = 0;
 
-    char mutant[SEQ2_MAX_LEN];
+    char mutant[SEQ2_MAX_LEN] = { '\0' };
 
     // data.start_offset = 0;
     int iterations = strlen(data.seq1) - strlen(data.seq2) + 1 - data.start_offset;
     // int best_offset = 0;
     // double best_score = 0;
 
-    struct timespec t;
-    t.tv_sec = 0;
-    t.tv_nsec = 1000000000 * 0.2;
+    // struct timespec t;
+    // t.tv_sec = 0;
+    // t.tv_nsec = 1000000000 * 0.5;
 
     for (int i = 0; i < iterations; i++)
     {
-        find_mutant(data.seq1, data.seq2, data.weights, i, mutant, data.is_max);
-        double score = compare_evaluate_seq(data.seq1, data.seq2, data.weights, i, NULL);
-        // if (score > best_score)
-        // {
-        //     best_score = score;
-        //     best_offset = i;
-        // }
-        clear();
-        print_seq(data.seq1, data.seq2, data.weights, i);
-        nanosleep(&t, &t);
+        double score = find_mutant(data.seq1, data.seq2, data.weights, i, mutant, data.is_max);
+        // double score = compare_evaluate_seq(data.seq1, data.seq2, data.weights, i, NULL);
+        // clear();
+        // print_seq(data.seq1, data.seq2, data.weights, i);
+        // nanosleep(&t, &t);
+
+        printf("offset: %4d, score: %g\n", i, score);
+        print_seq(data.seq1, mutant, data.weights, i);
+        // print_seq(data.seq1, data.seq2, data.weights, i);
+
+        break;
     }
     printf("iterations: %d, process: %d\n", iterations, data.start_offset);
 

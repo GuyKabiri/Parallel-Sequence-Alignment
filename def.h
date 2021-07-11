@@ -2,7 +2,7 @@
 #define __DEF_H__
 
 #define INPUT_FILE "input/input2.dat"
-#define OUTPUT_FILE "output/input2.dat"
+#define OUTPUT_FILE "output/output.dat"
 
 
 #define CONSERVATIVE_COUNT 9
