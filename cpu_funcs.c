@@ -22,8 +22,7 @@ double compare_evaluate_seq(char* seq1, char* seq2, double* weights, int offset,
     int iterations = fmin(strlen(seq2), strlen(seq1) - offset);        // TODO: change fmin with min
     char _sign;
     // double t = MPI_Wtime();
-// #pragma omp parallel for
-    for ( ; seq2_idx < iterations; seq1_idx++, seq2_idx++)
+    for ( ; seq2_idx < iterations; seq2_idx++, seq1_idx++)
     {
         // if      (seq1[seq1_idx] == seq2[seq2_idx])                      { _sign = STAR;  total_score += weights[0]; }
         // else if (is_conservative(seq1[seq1_idx], seq2[seq2_idx]))       { _sign = COLON; total_score -= weights[1]; }
@@ -32,6 +31,7 @@ double compare_evaluate_seq(char* seq1, char* seq2, double* weights, int offset,
         total_score += evaluate_chars(seq1[seq1_idx], seq2[seq2_idx], weights, &_sign);
 
         if (signs)  signs[seq2_idx] = _sign;
+        
     }
     // printf("%g\n", MPI_Wtime() - t);
     return total_score;

@@ -1,5 +1,5 @@
 EXEC = temp
-CFLAGS = -Wall
+CFLAGS = -Wall -fopenmp
 LIBS = -lm
 FILES = main.c cpu_funcs.c
 
