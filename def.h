@@ -1,6 +1,8 @@
 #ifndef __DEF_H__
 #define __DEF_H__
 
+#define ROOT 0
+
 #define INPUT_FILE "input/input2.dat"
 #define OUTPUT_FILE "output/output.dat"
 

@@ -107,7 +107,9 @@ ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)
     data->is_max = strcmp(func_type, MAXIMUM_FUNC) == 0 ? 1 : 0;    //  saves '1' if it is a maximum, otherwise, saves '0'
 
     //  divide the amount of offsets by 2 (each computers' tasks)
-    data->start_offset = (strlen(data->seq1) - strlen(data->seq2) + 1) / 2;
+    // data->start_offset = (strlen(data->seq1) - strlen(data->seq2) + 1) / 2;
+    data->num_tasks = 0;
+    data->offset_add = 0;
 
     return data;
 }
