@@ -3,7 +3,7 @@
 
 #define ROOT 0
 
-#define INPUT_FILE "input/input2.dat"
+#define INPUT_FILE "../src/input2.dat"
 #define OUTPUT_FILE "output/output.dat"
 
 

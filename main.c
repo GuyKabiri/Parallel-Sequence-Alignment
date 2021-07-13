@@ -61,8 +61,8 @@ int main(int argc, char* argv[])
             MPI_Abort(MPI_COMM_WORLD, 2);
             exit(1);
         }
-        
-        // if (!read_seq_and_weights_from_file(input_file, seq1, seq2, weights, &is_max))
+
+//         if (!read_seq_and_weights_from_file(input_file, seq1, seq2, weights, &is_max))
         if (!read_seq_and_weights_from_file(input_file, &data))
         {
             printf("Error reading input file `%s`\n", INPUT_FILE);
@@ -78,17 +78,30 @@ int main(int argc, char* argv[])
         //  send data to other process
     }
 
-    MPI_Bcast(&data, 1, mpi_data_type, ROOT, MPI_COMM_WORLD);
+//    MPI_Bcast(&data, 1, mpi_data_type, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(data.seq1, SEQ1_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(data.seq2, SEQ2_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(data.weights, WEIGHTS_COUNT, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(&data.num_tasks, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(&data.offset_add, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(&data.is_max, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
-    int start_offset = data.num_tasks * num_processes;  //  each process will handle the same amount of tasks, the offset will be multiply by the process index + the additional offset
 
+//    printf("proc %d: tasks: %d, off: %d\n", my_rank, data.num_tasks, data.offset_add);
+
+    int start_offset = data.num_tasks * my_rank;  //  each process will handle the same amount of tasks, the offset will be multiply by the process index + the additional offset
     if (my_rank == ROOT)
     {
         data.num_tasks += data.offset_add;
     }
+    else
+    {
+    	start_offset += data.offset_add;
+    }
+    printf("pro %d: tasks: %d, start: %d, end: %d\n", my_rank, data.num_tasks, start_offset, data.num_tasks + start_offset);
 
-    // int offset = 0;
-    // compare_evaluate_seq(seq1, seq2, weights, offset, NULL);
+//     int offset = 0;
+//     compare_evaluate_seq(seq1, seq2, weights, offset, NULL);
 
     // print_seq(seq1, seq2, weights, offset);
 
@@ -99,31 +112,41 @@ int main(int argc, char* argv[])
     char mutant[SEQ2_MAX_LEN] = { '\0' };
 
     // data.start_offset = 0;
-    int iterations = strlen(data.seq1) - strlen(data.seq2) + 1 - data.num_tasks;
-    // int best_offset = 0;
-    // double best_score = 0;
+//    int iterations = strlen(data.seq1) - strlen(data.seq2) + 1 - data.num_tasks;
+     int best_offset = 0;
+     double best_score = 0;
 
-    // struct timespec t;
-    // t.tv_sec = 0;
-    // t.tv_nsec = 1000000000 * 0.5;
+     struct timespec t;
+     t.tv_sec = 0;
+     t.tv_nsec = 1000000000 * 0.3;
 
-    for (int i = 0; i < iterations; i++)
+    for (int i = start_offset; i < data.num_tasks + start_offset; i++)
     {
         double score = find_mutant(data.seq1, data.seq2, data.weights, i, mutant, data.is_max);
+        if (score > best_offset)
+        {
+        	best_score = score;
+        	best_offset = i;
+        }
         // double score = compare_evaluate_seq(data.seq1, data.seq2, data.weights, i, NULL);
-        // clear();
-        // print_seq(data.seq1, data.seq2, data.weights, i);
-        // nanosleep(&t, &t);
+//         clear();
+         print_seq(data.seq1, data.seq2, data.weights, i);
+         nanosleep(&t, &t);
 
-        printf("offset: %4d, score: %g\n", i, score);
-        print_seq(data.seq1, mutant, data.weights, i);
+//        printf("offset: %4d, score: %g\n", i, score);
+//        print_seq(data.seq1, mutant, data.weights, i);
         // print_seq(data.seq1, data.seq2, data.weights, i);
-
-        break;
+//
+//        break;
     }
-    printf("iterations: %d, process: %d\n", iterations, data.num_tasks);
+    printf("proc %2d: offset: %3d, score: %g\n", my_rank, best_offset, best_score);
+    double score = find_mutant(data.seq1, data.seq2, data.weights, best_offset, mutant, data.is_max);
+    print_seq(data.seq1, mutant, data.weights, best_offset);
+//    printf("iterations: %d, process: %d\n", iterations, data.num_tasks);
 
 
-    // print_seq(seq1, seq2, weights, best_offset);
+//     print_seq(seq1, seq2, weights, best_offset);
+
+	MPI_Finalize();
 
 }
