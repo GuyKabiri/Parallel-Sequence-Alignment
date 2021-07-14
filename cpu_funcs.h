@@ -18,20 +18,23 @@
 #define SPACE   ' '     //  w4
 #define DASH    '-'
 
-double compare_evaluate_seq(char* seq1, char* seq2, double* weights, int offset, char* signs);      //  signs array is for debugging and pretty printing
-double evaluate_chars(char a, char b, double* weights, char* s);
+int is_greater(double a, double b);
+int is_smaller(double a, double b);
+
 char* is_contain(const char* s, const char c);
 int is_conservative(const char c1, const char c2);
 int is_semi_conservative(const char c1, const char c2);
-// int read_seq_and_weights_from_file(FILE* file, char* seq1, char* seq2, double* weights, int* type);
-ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data);
-void print_seq(char* seq1, char* seq2, double* weights, int offset);
 
 double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max);
 char find_char(char c1, char c2, double* weights, double* score, int (*eval_func)(double, double));
-char find_different_char(char c);
+char find_diff_char(char c);
+
+
+ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data);
 int write_results_to_file(FILE* file, char* mutant, int offset, double score);
-int is_greater(double a, double b);
-int is_smaller(double a, double b);
+
+void print_seq(char* seq1, char* seq2, double* weights, int offset);
+double evaluate_chars(char a, char b, double* weights, char* s);
+double compare_evaluate_seq(char* seq1, char* seq2, double* weights, int offset, char* signs);
 
 #endif //__CPU_FUNCS_H__

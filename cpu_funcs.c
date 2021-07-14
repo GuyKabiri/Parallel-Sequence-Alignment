@@ -28,7 +28,7 @@ char* is_contain(const char* s, const char c)
     return strchr(s, c);
 }
 
-//  cheack if both characters present in the same conservative group
+//  check if both characters present in the same conservative group
 int is_conservative(const char c1, const char c2)
 {
     for (int i = 0; i < CONSERVATIVE_COUNT; i++)    //  iterate over the conservative groups
@@ -37,7 +37,7 @@ int is_conservative(const char c1, const char c2)
     return 0;
 }
 
-//  cheack if both characters present in the same semi-conservative group
+//  check if both characters present in the same semi-conservative group
 int is_semi_conservative(const char c1, const char c2)
 {
     for (int i = 0; i < SEMI_CONSERVATIVE_COUNT; i++)   //  iterate over the semi-conservative groups
