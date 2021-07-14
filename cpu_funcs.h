@@ -27,7 +27,7 @@ int is_semi_conservative(const char c1, const char c2);
 ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data);
 void print_seq(char* seq1, char* seq2, double* weights, int offset);
 
-int find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max);
+double find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max);
 char maximize(char c1, char c2, double* weights, double* score);
 char minimize(char c1, char c2, double* weights, double* score);
 char find_different_char(char c);

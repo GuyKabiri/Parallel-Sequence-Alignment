@@ -132,7 +132,7 @@ void print_seq(char* seq1, char* seq2, double* weights, int offset)
 }
 
 //  find the best mutant for a given offset
-int find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max)
+double find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max)
 {
     int seq1_idx, seq2_idx;
     double total_score = 0;
