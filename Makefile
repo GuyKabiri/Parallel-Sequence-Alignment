@@ -1,13 +1,13 @@
-CFLAGS = -Wall -fopenmp
+CFLAGS = -Wall
 LIBS = -lm
 C_FILES = main.c cpu_funcs.c
-CU_FILES = cuda_functions.cu
-O_FILES = main.o c_functions.o cuda_functions.o
+CU_FILES = cuda_funcs.cu
+O_FILES = main.o c_funcs.o cuda_funcs.o
 
 build:
-	mpicxx -fopenmp -c $(C_FILES) $(LIBS) $(CFLAGS) -o main.o
-	mpicxx -fopenmp -c $(C_FILES) $(LIBS) $(CFLAGS) -o c_functions.o
-	nvcc -I./inc -c $(CU_FILES) $(LIBS) $(CFLAGS) -o cuda_functions.o
+	mpicxx -fopenmp -c main.c $(LIBS) $(CFLAGS) -o main.o
+	mpicxx -fopenmp -c cpu_funcs.c $(LIBS) $(CFLAGS) -o c_funcs.o
+	nvcc -I./inc -c $(CU_FILES) -o cuda_funcs.o
 	mpicxx -fopenmp -o mpiCudaOpemMP  $(O_FILES)  /usr/local/cuda-9.1/lib64/libcudart_static.a -ldl -lrt
 
 all: clean build
@@ -15,8 +15,29 @@ all: clean build
 clean:
 	rm -f *.o ./mpiCudaOpemMP
 
-run:
-	mpiexec -np 2 ./mpiCudaOpemMP 5000
+runSeqNoCuda: 
+	mpiexec -np 1 ./mpiCudaOpenMP 0
 
-runOn2:
-	mpiexec -np 2 -machinefile mf  -map-by  node  ./mpiCudaOpemMP 5000
+runSeqHalfCuda: 
+	mpiexec -np 1 ./mpiCudaOpenMP 50
+
+runSeqFullCuda: 
+	mpiexec -np 1 ./mpiCudaOpenMP 100
+
+run1CompParNoCuda: 
+	mpiexec -np 2 ./mpiCudaOpenMP 0
+
+run1CompParHalfCuda: 
+	mpiexec -np 2 ./mpiCudaOpenMP 50
+
+run1CompParFullCuda: 
+	mpiexec -np 2 ./mpiCudaOpenMP 100
+
+run2CompParNoCuda: 
+	mpiexec -np 2 -machinefile  mf  -map-by  node  ./mpiCudaOpenMP 0
+
+run2CompParHalfCuda: 
+	mpiexec -np 2 -machinefile  mf  -map-by  node  ./mpiCudaOpenMP 50
+
+run2CompParFullCuda: 
+	mpiexec -np 2 -machinefile  mf  -map-by  node  ./mpiCudaOpenMP 100

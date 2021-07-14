@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <mpi.h>
 #include <omp.h>
 #include <math.h>
 #include "cpu_funcs.h"
@@ -10,6 +11,122 @@
 
 char conservatives_arr[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
 char semi_conservatives_arr[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
+
+extern int cuda_percentage;
+
+void cpu_run_program(int pid, int num_processes)
+{
+    ProgramData data;
+
+    if (pid == ROOT)
+    {
+        FILE* input_file;
+
+        input_file = fopen(INPUT_FILE, "r");
+        if (!input_file)
+        {
+            printf("Error open input file `%s`\n", INPUT_FILE);
+            MPI_Abort(MPI_COMM_WORLD, 2);
+        }
+
+//         if (!read_seq_and_weights_from_file(input_file, seq1, seq2, weights, &is_max))
+        if (!read_seq_and_weights_from_file(input_file, &data))
+        {
+            printf("Error reading input file `%s`\n", INPUT_FILE);
+            MPI_Abort(MPI_COMM_WORLD, 2);
+        }
+        fclose(input_file);
+
+        int iterations = strlen(data.seq1) - strlen(data.seq2) + 1;
+        data.num_tasks = iterations / num_processes;
+        data.offset_add = iterations % num_processes;   //  if amount of offset does not divide by amount of processes, the root process will take the additional tasks
+
+        //  send data to other process
+    }
+
+//    MPI_Bcast(&data, 1, mpi_data_type, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(data.seq1, SEQ1_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(data.seq2, SEQ2_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(data.weights, WEIGHTS_COUNT, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(&data.num_tasks, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(&data.offset_add, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+    MPI_Bcast(&data.is_max, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+
+
+//    printf("proc %d: tasks: %d, off: %d\n", my_rank, data.num_tasks, data.offset_add);
+
+    int start_offset = data.num_tasks * pid;  //  each process will handle the same amount of tasks, the offset will be multiply by the process index + the additional offset
+    if (pid == ROOT)
+    {
+        data.num_tasks += data.offset_add;
+    }
+    else
+    {
+    	start_offset += data.offset_add;
+    }
+//    printf("pro %d: tasks: %d, start: %d, end: %d\n", my_rank, data.num_tasks, start_offset, data.num_tasks + start_offset);
+
+
+    char mutant[SEQ2_MAX_LEN] = { '\0' };
+
+     int best_offset = 0;
+     double best_score = 0;
+
+
+    for (int i = start_offset; i < data.num_tasks + start_offset; i++)
+    {
+        double score = find_best_mutant_offset(data.seq1, data.seq2, data.weights, i, mutant, data.is_max);
+        if (score > best_score)
+        {
+        	best_score = score;
+        	best_offset = i;
+        }
+    }
+
+//    printf("proc %2d: offset: %3d, score: %g\n", my_rank, best_offset, best_score);
+//    double score = find_mutant(data.seq1, data.seq2, data.weights, best_offset, mutant, data.is_max);
+
+
+
+
+    double mymax[2] = { 0 };
+    mymax[0] = best_score;
+    mymax[1] = pid;
+    double globalmax[2] = { 0 };
+
+    MPI_Allreduce(mymax, globalmax, 1, MPI_2DOUBLE_PRECISION, MPI_MAXLOC, MPI_COMM_WORLD);
+    int sender_rank = globalmax[1];
+
+//    printf("me: %d, global[0]: %g, global[1]: %g\n", my_rank, globalmax[0], globalmax[1]);
+
+    MPI_Status status;
+    if (pid == ROOT)
+    {
+    	best_score = globalmax[0];
+    	MPI_Recv(&best_offset, 1, MPI_DOUBLE, sender_rank, 0, MPI_COMM_WORLD, &status);
+    	MPI_Recv(mutant, SEQ2_MAX_LEN, MPI_CHAR, sender_rank, 0, MPI_COMM_WORLD, &status);
+    	printf("best offset: %3d, by procs: %2d, score: %g\n%s\n", best_offset, sender_rank, best_score, mutant);
+    	FILE* out_file = fopen(OUTPUT_FILE, "w");
+    	if (!out_file)
+    	{
+    		printf("Error open or write to the output file %s\n", OUTPUT_FILE);
+    		MPI_Abort(MPI_COMM_WORLD, 2);
+			exit(1);
+    	}
+    	if (!write_results_to_file(out_file, mutant, best_offset, best_score))
+    	{
+    		printf("Error write to the output file %s\n", OUTPUT_FILE);
+			MPI_Abort(MPI_COMM_WORLD, 2);
+			exit(1);
+    	}
+    	fclose(out_file);
+    }
+    else if (pid == sender_rank)    //  send only from the process with max score
+    {
+    	MPI_Send(&best_offset, 1, MPI_DOUBLE, ROOT, 0, MPI_COMM_WORLD);
+    	MPI_Send(mutant, SEQ2_MAX_LEN, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
+    }
+}
 
 int is_greater(double a, double b)
 {
@@ -23,13 +140,13 @@ int is_smaller(double a, double b)
 
 //  check for the character c in the string s
 //  returns NULL if c is not presented in s, otherwise returns the address of the occurrence of c
-char* is_contain(const char* s, const char c)
+char* is_contain(char* s, char c)
 {
     return strchr(s, c);
 }
 
 //  check if both characters present in the same conservative group
-int is_conservative(const char c1, const char c2)
+int is_conservative(char c1, char c2)
 {
     for (int i = 0; i < CONSERVATIVE_COUNT; i++)    //  iterate over the conservative groups
         if (is_contain(conservatives_arr[i], c1) && is_contain(conservatives_arr[i], c2))   //  if both characters present
@@ -38,7 +155,7 @@ int is_conservative(const char c1, const char c2)
 }
 
 //  check if both characters present in the same semi-conservative group
-int is_semi_conservative(const char c1, const char c2)
+int is_semi_conservative(char c1, char c2)
 {
     for (int i = 0; i < SEMI_CONSERVATIVE_COUNT; i++)   //  iterate over the semi-conservative groups
             if (is_contain(semi_conservatives_arr[i], c1) && is_contain(semi_conservatives_arr[i], c2))   //  if both characters present

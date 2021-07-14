@@ -18,12 +18,14 @@
 #define SPACE   ' '     //  w4
 #define DASH    '-'
 
+void cpu_run_program(int pid, int num_processes);
+
 int is_greater(double a, double b);
 int is_smaller(double a, double b);
 
-char* is_contain(const char* s, const char c);
-int is_conservative(const char c1, const char c2);
-int is_semi_conservative(const char c1, const char c2);
+char* is_contain(char* s, char c);
+int is_conservative(char c1, char c2);
+int is_semi_conservative(char c1, char c2);
 
 double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max);
 char find_char(char c1, char c2, double* weights, double* score, int (*eval_func)(double, double));
