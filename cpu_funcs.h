@@ -1,22 +1,7 @@
 #ifndef __CPU_FUNCS_H__
 #define __CPU_FUNCS_H__
 
-#include "def.h"
 #include "program_data.h"
-
-// typedef struct _pair{
-//     char seq1[SEQ1_MAX_LEN];
-//     char seq2[SEQ2_MAX_LEN];
-//     char signs[SEQ2_MAX_LEN];
-//     int offset;
-//     double score; 
-// } Pair;
-
-#define STAR    '*'     //  w1
-#define COLON   ':'     //  w2
-#define POINT   '.'     //  w3
-#define SPACE   ' '     //  w4
-#define DASH    '-'
 
 void cpu_run_program(int pid, int num_processes);
 

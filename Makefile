@@ -5,8 +5,8 @@ CU_FILES = cuda_funcs.cu
 O_FILES = main.o c_funcs.o cuda_funcs.o
 
 build:
-	mpicxx -fopenmp -c main.c $(LIBS) $(CFLAGS) -o main.o
-	mpicxx -fopenmp -c cpu_funcs.c $(LIBS) $(CFLAGS) -o c_funcs.o
+	mpicxx -fopenmp -c main.c -o main.o
+	mpicxx -fopenmp -c cpu_funcs.c -o c_funcs.o
 	nvcc -I./inc -c $(CU_FILES) -o cuda_funcs.o
 	mpicxx -fopenmp -o mpiCudaOpemMP  $(O_FILES)  /usr/local/cuda-9.1/lib64/libcudart_static.a -ldl -lrt
 
@@ -16,7 +16,7 @@ clean:
 	rm -f *.o ./mpiCudaOpemMP
 
 runSeqNoCuda: 
-	mpiexec -np 1 ./mpiCudaOpenMP 0
+	# mpiexec -np 1 ./mpiCudaOpenMP 0
 
 runSeqHalfCuda: 
 	mpiexec -np 1 ./mpiCudaOpenMP 50

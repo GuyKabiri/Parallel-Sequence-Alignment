@@ -1,6 +1,12 @@
 #ifndef __DEF_H__
 #define __DEF_H__
 
+#define STAR    '*'     //  w1
+#define COLON   ':'     //  w2
+#define POINT   '.'     //  w3
+#define SPACE   ' '     //  w4
+#define DASH    '-'
+
 #define ROOT 0
 
 #define INPUT_FILE "../src/input2.dat"

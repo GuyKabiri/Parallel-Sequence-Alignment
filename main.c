@@ -1,19 +1,9 @@
-// TODO: re-structure the directories, delete input, output dirs
-
-
-#define _CRT_SECURE_NO_WARNINGS             //   TODO: remove CTR_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <mpi.h>
-#include <math.h>
-#include <time.h>
 
 #include "main.h"
 #include "cpu_funcs.h"
-#include "def.h"
-#include "mutant.h"
-#include "program_data.h"
 
 int main(int argc, char* argv[])
 {
