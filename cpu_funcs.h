@@ -30,6 +30,7 @@ void print_seq(char* seq1, char* seq2, double* weights, int offset);
 int find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max);
 char maximize(char c1, char c2, double* weights, double* score);
 char minimize(char c1, char c2, double* weights, double* score);
+char find_different_char(char c);
 
 
 #endif //__CPU_FUNCS_H__

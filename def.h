@@ -7,6 +7,9 @@
 #define OUTPUT_FILE "output/output.dat"
 
 
+#define NUM_CHARS 26
+#define FIRST_CHAR 'A'
+
 #define CONSERVATIVE_COUNT 9
 #define SEMI_CONSERVATIVE_COUNT 11
 

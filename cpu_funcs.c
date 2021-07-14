@@ -173,7 +173,7 @@ char maximize(char c1, char c2, double* weights, double* score)
     if (is_semi_conservative(c1, c2))   //  if the characters are semi conservative, then
     {
         if      (weights[0] > -weights[2] && weights[0] > -weights[3])  { *score += weights[0]; return c1; }    //  if w1 > w3, w4 then return STAR
-        else if (-weights[3] > -weights[2] && -weights[3] > weights[0]) { *score -= weights[3]; return DASH; }  //  if w4 > w1, w3 then return SPACE
+        else if (-weights[3] > -weights[2] && -weights[3] > weights[0]) { *score -= weights[3]; return find_different_char(c1); }  //  if w4 > w1, w3 then return SPACE
         return c2;                                                                      //  otherwise, return COLON (same letter, changing to other semi conservative will have no effect)
     }
 
@@ -186,7 +186,17 @@ char maximize(char c1, char c2, double* weights, double* score)
     }
     
     *score -= weights[3];
-    return DASH;
+    return find_different_char(c1);
+}
+
+char find_different_char(char c)
+{
+	char other = c;
+	do
+	{
+		other = (other + 1) % NUM_CHARS + FIRST_CHAR;	//	get next letter cyclically
+	} while(is_conservative(c, other) || is_semi_conservative(c, other));
+	return other;
 }
 
 /*  

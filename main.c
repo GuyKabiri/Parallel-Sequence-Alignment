@@ -116,9 +116,6 @@ int main(int argc, char* argv[])
      int best_offset = 0;
      double best_score = 0;
 
-     struct timespec t;
-     t.tv_sec = 0;
-     t.tv_nsec = 1000000000 * 0.3;
 
     for (int i = start_offset; i < data.num_tasks + start_offset; i++)
     {
@@ -130,8 +127,6 @@ int main(int argc, char* argv[])
         }
         // double score = compare_evaluate_seq(data.seq1, data.seq2, data.weights, i, NULL);
 //         clear();
-         print_seq(data.seq1, data.seq2, data.weights, i);
-         nanosleep(&t, &t);
 
 //        printf("offset: %4d, score: %g\n", i, score);
 //        print_seq(data.seq1, mutant, data.weights, i);
@@ -139,9 +134,12 @@ int main(int argc, char* argv[])
 //
 //        break;
     }
+
     printf("proc %2d: offset: %3d, score: %g\n", my_rank, best_offset, best_score);
     double score = find_mutant(data.seq1, data.seq2, data.weights, best_offset, mutant, data.is_max);
     print_seq(data.seq1, mutant, data.weights, best_offset);
+
+    print_seq(data.seq1, data.seq2, data.weights, best_offset);
 //    printf("iterations: %d, process: %d\n", iterations, data.num_tasks);
 
 
