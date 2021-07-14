@@ -26,6 +26,7 @@ int main(int argc, char* argv[])
 	int  num_processes;     //	number of processes
     MPI_Init(&argc, &argv);	//	start MPI
 
+    MPI_Status status;
     /* create a type for data struct */
 	MPI_Datatype 	mpi_data_type;
 	
@@ -98,21 +99,11 @@ int main(int argc, char* argv[])
     {
     	start_offset += data.offset_add;
     }
-    printf("pro %d: tasks: %d, start: %d, end: %d\n", my_rank, data.num_tasks, start_offset, data.num_tasks + start_offset);
+//    printf("pro %d: tasks: %d, start: %d, end: %d\n", my_rank, data.num_tasks, start_offset, data.num_tasks + start_offset);
 
-//     int offset = 0;
-//     compare_evaluate_seq(seq1, seq2, weights, offset, NULL);
-
-    // print_seq(seq1, seq2, weights, offset);
-
-    // Mutant best_mutant;
-    // best_mutant.score = data.is_max ? __DBL_MIN__ : __DBL_MAX__;
-    // best_mutant.offset = 0;
 
     char mutant[SEQ2_MAX_LEN] = { '\0' };
 
-    // data.start_offset = 0;
-//    int iterations = strlen(data.seq1) - strlen(data.seq2) + 1 - data.num_tasks;
      int best_offset = 0;
      double best_score = 0;
 
@@ -125,25 +116,37 @@ int main(int argc, char* argv[])
         	best_score = score;
         	best_offset = i;
         }
-        // double score = compare_evaluate_seq(data.seq1, data.seq2, data.weights, i, NULL);
-//         clear();
-
-//        printf("offset: %4d, score: %g\n", i, score);
-//        print_seq(data.seq1, mutant, data.weights, i);
-        // print_seq(data.seq1, data.seq2, data.weights, i);
-//
-//        break;
     }
 
-    printf("proc %2d: offset: %3d, score: %g\n", my_rank, best_offset, best_score);
-    double score = find_mutant(data.seq1, data.seq2, data.weights, best_offset, mutant, data.is_max);
-//    print_seq(data.seq1, mutant, data.weights, best_offset);
-
-//    print_seq(data.seq1, data.seq2, data.weights, best_offset);
-//    printf("iterations: %d, process: %d\n", iterations, data.num_tasks);
+//    printf("proc %2d: offset: %3d, score: %g\n", my_rank, best_offset, best_score);
+//    double score = find_mutant(data.seq1, data.seq2, data.weights, best_offset, mutant, data.is_max);
 
 
-//     print_seq(seq1, seq2, weights, best_offset);
+
+
+    double mymax[2] = { 0 };
+    mymax[0] = best_score;
+    mymax[1] = my_rank;
+    double globalmax[2] = { 0 };
+
+    MPI_Allreduce(mymax, globalmax, 1, MPI_2DOUBLE_PRECISION, MPI_MAXLOC, MPI_COMM_WORLD);
+    int sender_rank = globalmax[1];
+
+//    printf("me: %d, global[0]: %g, global[1]: %g\n", my_rank, globalmax[0], globalmax[1]);
+
+    if (my_rank == ROOT)
+    {
+    	best_score = globalmax[0];
+    	MPI_Recv(&best_offset, 1, MPI_DOUBLE, sender_rank, 0, MPI_COMM_WORLD, &status);
+    	MPI_Recv(mutant, SEQ2_MAX_LEN, MPI_CHAR, sender_rank, 0, MPI_COMM_WORLD, &status);
+    	printf("best offset: %3d, by procs: %2d, score: %g\n%s\n", best_offset, sender_rank, best_score, mutant);
+    }
+    else if (my_rank == sender_rank)
+    {
+    	MPI_Send(&best_offset, 1, MPI_DOUBLE, ROOT, 0, MPI_COMM_WORLD);
+    	MPI_Send(mutant, SEQ2_MAX_LEN, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
+    }
+
 
 	MPI_Finalize();
 
