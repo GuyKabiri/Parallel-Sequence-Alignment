@@ -220,6 +220,12 @@ char minimize(char c1, char c2, double* weights, double* score)
     return weights[0] < -weights[3] ? c1 : DASH;
 }
 
+int write_results_to_file(FILE* file, char* mutant, int offset, double score)
+{
+	if (!file || !mutant)	return 0;
+
+	return fprintf(file, "%s\n%d %g", mutant, offset, score) > 0;	//	fprintf will return negative value if error occurred while writing to the file
+}
 
 
 

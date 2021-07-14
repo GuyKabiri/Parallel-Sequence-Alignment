@@ -140,6 +140,20 @@ int main(int argc, char* argv[])
     	MPI_Recv(&best_offset, 1, MPI_DOUBLE, sender_rank, 0, MPI_COMM_WORLD, &status);
     	MPI_Recv(mutant, SEQ2_MAX_LEN, MPI_CHAR, sender_rank, 0, MPI_COMM_WORLD, &status);
     	printf("best offset: %3d, by procs: %2d, score: %g\n%s\n", best_offset, sender_rank, best_score, mutant);
+    	FILE* out_file = fopen(OUTPUT_FILE, "w");
+    	if (!out_file)
+    	{
+    		printf("Error open or write to the output file %s\n", OUTPUT_FILE);
+    		MPI_Abort(MPI_COMM_WORLD, 2);
+			exit(1);
+    	}
+    	if (!write_results_to_file(out_file, mutant, best_offset, best_score))
+    	{
+    		printf("Error write to the output file %s\n", OUTPUT_FILE);
+			MPI_Abort(MPI_COMM_WORLD, 2);
+			exit(1);
+    	}
+    	fclose(out_file);
     }
     else if (my_rank == sender_rank)
     {

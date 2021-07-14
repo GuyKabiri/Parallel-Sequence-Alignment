@@ -4,7 +4,7 @@
 #define ROOT 0
 
 #define INPUT_FILE "../src/input2.dat"
-#define OUTPUT_FILE "output/output.dat"
+#define OUTPUT_FILE "../src/output.dat"
 
 
 #define NUM_CHARS 26

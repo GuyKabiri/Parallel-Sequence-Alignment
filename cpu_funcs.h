@@ -31,6 +31,7 @@ double find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mu
 char maximize(char c1, char c2, double* weights, double* score);
 char minimize(char c1, char c2, double* weights, double* score);
 char find_different_char(char c);
+int write_results_to_file(FILE* file, char* mutant, int offset, double score);
 
 
 #endif //__CPU_FUNCS_H__
