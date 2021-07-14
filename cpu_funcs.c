@@ -144,9 +144,8 @@ double find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mu
     {
         seq1_idx = offset + i;
         seq2_idx = i;
-        ch = is_max ?                                               //  if it is a maximus assignment
-            maximize(seq1[seq1_idx], seq2[seq2_idx], weights, &total_score) :     //  find the maximum suitable character
-            minimize(seq1[seq1_idx], seq2[seq2_idx], weights, &total_score);      //  find the minimum suitable character
+        int (*eval_func)(double, double) = is_max ? is_greater : is_smaller;
+        ch = find_char(seq1[seq1_idx], seq2[seq2_idx], weights, &total_score, eval_func);
 
         mutant[seq2_idx] = ch;
     }
@@ -159,7 +158,7 @@ double find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mu
     therefore, if c1 and c2 are NOT conservative, miximize the equation should be by max(w1, -w3, -w4)
 */
 //  TODO:   finding a char that will evaluated as the sign SPACE and do not return SPACE
-char maximize(char c1, char c2, double* weights, double* score)
+char find_char(char c1, char c2, double* weights, double* score, int (*eval_func)(double, double))
 {
     if (is_conservative(c1, c2))    //  if the characters are conservative, substitute is not allowed   ->  return the same letter
     {    
@@ -172,14 +171,14 @@ char maximize(char c1, char c2, double* weights, double* score)
 
     if (is_semi_conservative(c1, c2))   //  if the characters are semi conservative, then
     {
-        if      (weights[0] > -weights[2] && weights[0] > -weights[3])  { *score += weights[0]; return c1; }    //  if w1 > w3, w4 then return STAR
-        else if (-weights[3] > -weights[2] && -weights[3] > weights[0]) { *score -= weights[3]; return find_different_char(c1); }  //  if w4 > w1, w3 then return SPACE
+        if      (eval_func(weights[0], -weights[2]) && eval_func(weights[0], -weights[3]))  { *score += weights[0]; return c1; }    //  if w1 > w3, w4 then return STAR
+        else if (eval_func(-weights[3], -weights[2]) && eval_func(-weights[3], weights[0])) { *score -= weights[3]; return find_different_char(c1); }  //  if w4 > w1, w3 then return SPACE
         return c2;                                                                      //  otherwise, return COLON (same letter, changing to other semi conservative will have no effect)
     }
 
     //  otherwise, the characters are neither conservative, nor semi conservative
     //  then, maximize by max(w1, w4) which means to return c1 or SPACE
-    if (weights[0] > -weights[3])
+    if (eval_func(weights[0], -weights[3]))
     {
         *score += weights[0];
         return c1;
@@ -199,33 +198,24 @@ char find_different_char(char c)
 	return other;
 }
 
-/*  
-    s = w1 * n_start - w2 * n_colon - w3 * n_point - w4 * n_space
-    therefore, if c1 and c2 are NOT conservative, minimize the equation should be by min(w1, -w3, -w4)
-*/
-char minimize(char c1, char c2, double* weights, double* score)
-{                       
-    if (is_conservative(c1, c2))    return c2;      //  if the characters are conservative, substitute is not allowed   ->  return the same letter
-
-    if (is_semi_conservative(c1, c2))   //  if the characters are semi conservative, then
-    {
-        if      (weights[0] < -weights[2] && weights[0] < -weights[3])      return c1;     //  if w1 > w3, w4 then return STAR
-        else if (-weights[3] < -weights[2] && -weights[3] < weights[0])   return DASH;   //  if w4 > w1, w3 then return SPACE
-        return c2;                                                                      //  otherwise, return COLON (same letter, changing to other semi conservative will have no effect)
-    }
-
-    //  otherwise, the characters are neither conservative, nor semi conservative
-    //  then, minimize by min(w1, w4) which means to return c1 or SPACE
-
-    return weights[0] < -weights[3] ? c1 : DASH;
-}
-
 int write_results_to_file(FILE* file, char* mutant, int offset, double score)
 {
 	if (!file || !mutant)	return 0;
 
 	return fprintf(file, "%s\n%d %g", mutant, offset, score) > 0;	//	fprintf will return negative value if error occurred while writing to the file
 }
+
+int is_greater(double a, double b)
+{
+	return a > b;
+}
+
+int is_smaller(double a, double b)
+{
+	return a < b;
+}
+
+
 
 
 
@@ -251,3 +241,49 @@ int write_results_to_file(FILE* file, char* mutant, int offset, double score)
 
 //     return eval_func(weights[0], weights[3]) ? c1 : SPACE;
 // }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//
+//char find_char(char c1, char c2, double* weights, double* score, int (*eval_func)(double, double))
+//{
+//    if (is_conservative(c1, c2))    //  if the characters are conservative, substitute is not allowed   ->  return the same letter
+//    {
+//        if (c1 == c2)               //  if same letters -> add the suitable weight
+//            *score += weights[0];
+//        else                        //  not same letters, but conservative ones -> substruct the suitable weight
+//            *score -= weights[1];
+//        return c2;
+//    }
+//
+//    if (is_semi_conservative(c1, c2))   //  if the characters are semi conservative, then
+//    {
+//        if      (weights[0] > -weights[2] && weights[0] > -weights[3])  { *score += weights[0]; return c1; }    //  if w1 > w3, w4 then return STAR
+//        else if (-weights[3] > -weights[2] && -weights[3] > weights[0]) { *score -= weights[3]; return find_different_char(c1); }  //  if w4 > w1, w3 then return SPACE
+//        return c2;                                                                      //  otherwise, return COLON (same letter, changing to other semi conservative will have no effect)
+//    }
+//
+//    //  otherwise, the characters are neither conservative, nor semi conservative
+//    //  then, maximize by max(w1, w4) which means to return c1 or SPACE
+//    if (weights[0] > -weights[3])
+//    {
+//        *score += weights[0];
+//        return c1;
+//    }
+//
+//    *score -= weights[3];
+//    return find_different_char(c1);
+//}

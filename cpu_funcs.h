@@ -28,10 +28,10 @@ ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data);
 void print_seq(char* seq1, char* seq2, double* weights, int offset);
 
 double find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max);
-char maximize(char c1, char c2, double* weights, double* score);
-char minimize(char c1, char c2, double* weights, double* score);
+char find_char(char c1, char c2, double* weights, double* score, int (*eval_func)(double, double));
 char find_different_char(char c);
 int write_results_to_file(FILE* file, char* mutant, int offset, double score);
-
+int is_greater(double a, double b);
+int is_smaller(double a, double b);
 
 #endif //__CPU_FUNCS_H__
