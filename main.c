@@ -123,7 +123,7 @@ int main(int argc, char* argv[])
     for (int i = start_offset; i < data.num_tasks + start_offset; i++)
     {
         double score = find_mutant(data.seq1, data.seq2, data.weights, i, mutant, data.is_max);
-        if (score > best_offset)
+        if (score > best_score)
         {
         	best_score = score;
         	best_offset = i;

@@ -134,15 +134,16 @@ void print_seq(char* seq1, char* seq2, double* weights, int offset)
 //  find the best mutant for a given offset
 int find_mutant(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max)
 {
-    int seq1_idx = offset;
-    int seq2_idx = 0;
+    int seq1_idx, seq2_idx;
     double total_score = 0;
     int iterations = fmin(strlen(seq2), strlen(seq1) - offset);        // TODO: change fmin with min
     char ch;
 
-    for ( ; seq2_idx < iterations; seq1_idx++, seq2_idx++)          //  iterate over all the characters
+#pragma omp parallel for
+    for (int i = 0; i < iterations; i++)          //  iterate over all the characters
     {
-        
+        seq1_idx = offset + i;
+        seq2_idx = i;
         ch = is_max ?                                               //  if it is a maximus assignment
             maximize(seq1[seq1_idx], seq2[seq2_idx], weights, &total_score) :     //  find the maximum suitable character
             minimize(seq1[seq1_idx], seq2[seq2_idx], weights, &total_score);      //  find the minimum suitable character
