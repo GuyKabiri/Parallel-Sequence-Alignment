@@ -8,15 +8,15 @@ build:
 	mpicxx -fopenmp -c main.c -o main.o
 	mpicxx -fopenmp -c cpu_funcs.c -o c_funcs.o
 	nvcc -I./inc -c $(CU_FILES) -o cuda_funcs.o
-	mpicxx -fopenmp -o mpiCudaOpemMP  $(O_FILES)  /usr/local/cuda-9.1/lib64/libcudart_static.a -ldl -lrt
+	mpicxx -fopenmp -o mpiCudaOpenMP  $(O_FILES)  /usr/local/cuda-9.1/lib64/libcudart_static.a -ldl -lrt
 
 all: clean build
 
 clean:
-	rm -f *.o ./mpiCudaOpemMP
+	rm -f *.o ./mpiCudaOpenMP
 
 runSeqNoCuda: 
-	# mpiexec -np 1 ./mpiCudaOpenMP 0
+	mpiexec -np 1 ./mpiCudaOpenMP 0
 
 runSeqHalfCuda: 
 	mpiexec -np 1 ./mpiCudaOpenMP 50

@@ -3,14 +3,14 @@
 
 #define STAR    '*'     //  w1
 #define COLON   ':'     //  w2
-#define POINT   '.'     //  w3
+#define DOT     '.'     //  w3
 #define SPACE   ' '     //  w4
 #define DASH    '-'
 
 #define ROOT 0
 
-#define INPUT_FILE "../src/input2.dat"
-#define OUTPUT_FILE "../src/output.dat"
+#define INPUT_FILE "./input/input2.dat"
+#define OUTPUT_FILE "./output/output.dat"
 
 
 #define NUM_CHARS 26

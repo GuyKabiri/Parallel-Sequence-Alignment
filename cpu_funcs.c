@@ -53,7 +53,7 @@ void cpu_run_program(int pid, int num_processes)
     MPI_Bcast(&data.is_max, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
 
-//    printf("proc %d: tasks: %d, off: %d\n", my_rank, data.num_tasks, data.offset_add);
+//    printf("proc %d: tasks: %d, off: %d\n", pid, data.num_tasks, data.offset_add);
 
     int start_offset = data.num_tasks * pid;  //  each process will handle the same amount of tasks, the offset will be multiply by the process index + the additional offset
     if (pid == ROOT)
@@ -64,13 +64,13 @@ void cpu_run_program(int pid, int num_processes)
     {
     	start_offset += data.offset_add;
     }
-//    printf("pro %d: tasks: %d, start: %d, end: %d\n", my_rank, data.num_tasks, start_offset, data.num_tasks + start_offset);
+//    printf("pro %d: tasks: %d, start: %d, end: %d\n", pid, data.num_tasks, start_offset, data.num_tasks + start_offset);
 
 
     char mutant[SEQ2_MAX_LEN] = { '\0' };
 
-     int best_offset = 0;
-     double best_score = 0;
+    int best_offset = 0;
+    double best_score = 0;
 
 
     for (int i = start_offset; i < data.num_tasks + start_offset; i++)
@@ -97,9 +97,14 @@ void cpu_run_program(int pid, int num_processes)
     MPI_Allreduce(mymax, globalmax, 1, MPI_2DOUBLE_PRECISION, MPI_MAXLOC, MPI_COMM_WORLD);
     int sender_rank = globalmax[1];
 
-//    printf("me: %d, global[0]: %g, global[1]: %g\n", my_rank, globalmax[0], globalmax[1]);
+//    printf("me: %d, global[0]: %g, global[1]: %g\n", pid, globalmax[0], globalmax[1]);
 
     MPI_Status status;
+    if (pid == sender_rank)    //  send only from the process with max score
+    {
+    	MPI_Send(&best_offset, 1, MPI_DOUBLE, ROOT, 0, MPI_COMM_WORLD);
+    	MPI_Send(mutant, SEQ2_MAX_LEN, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
+    }
     if (pid == ROOT)
     {
     	best_score = globalmax[0];
@@ -120,11 +125,6 @@ void cpu_run_program(int pid, int num_processes)
 			exit(1);
     	}
     	fclose(out_file);
-    }
-    else if (pid == sender_rank)    //  send only from the process with max score
-    {
-    	MPI_Send(&best_offset, 1, MPI_DOUBLE, ROOT, 0, MPI_COMM_WORLD);
-    	MPI_Send(mutant, SEQ2_MAX_LEN, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
     }
 }
 
@@ -171,15 +171,14 @@ double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offs
     int iterations = fmin(strlen(seq2), strlen(seq1) - offset);        // TODO: change fmin with min
     char ch;
 
-#pragma omp parallel for
     for (int i = 0; i < iterations; i++)          //  iterate over all the characters
     {
         seq1_idx = offset + i;
         seq2_idx = i;
-        int (*eval_func)(double, double) = is_max ? is_greater : is_smaller;
-        ch = find_char(seq1[seq1_idx], seq2[seq2_idx], weights, &total_score, eval_func);
-
-        mutant[seq2_idx] = ch;
+        // int (*eval_func)(double, double) = is_max ? is_greater : is_smaller;
+        // ch = find_char(seq1[seq1_idx], seq2[seq2_idx], weights, &total_score, eval_func);
+        double s = find_max_char(seq1[seq1_idx], seq2[seq2_idx], weights, &mutant[seq2_idx]);
+        total_score += s;
     }
 
     return total_score;           //  TODO: return new score
@@ -207,7 +206,7 @@ char find_char(char c1, char c2, double* weights, double* score, int (*eval_func
     if (is_semi_conservative(c1, c2))   //  if the characters are semi conservative, then
     {
         if      (eval_func(weights[0], -weights[2]) && eval_func(weights[0], -weights[3]))  { *score += weights[0]; return c1; }    //  if w1 > w3, w4 then return STAR
-        else if (eval_func(-weights[3], -weights[2]) && eval_func(-weights[3], weights[0])) { *score -= weights[3]; return find_diff_char(c1); }  //  if w4 > w1, w3 then return SPACE
+        else if (eval_func(-weights[3], -weights[2]) && eval_func(-weights[3], weights[0])) { *score -= weights[3]; return find_char_to_space(c1); }  //  if w4 > w1, w3 then return SPACE
         return c2;                                                                      //  otherwise, return COLON (same letter, changing to other semi conservative will have no effect)
     }
 
@@ -220,11 +219,56 @@ char find_char(char c1, char c2, double* weights, double* score, int (*eval_func
     }
     
     *score -= weights[3];
-    return find_diff_char(c1);
+    return find_char_to_space(c1);
+}
+
+double find_max_char(char c1, char c2, double* weights, char* return_ch)
+{
+    //  TODO: check maybe calculate signs array in parallel while decrease the computation time, over calculate each sign seperate
+    
+    char sign;
+    double curr_score = evaluate_chars(c1, c2, weights, &sign);
+    switch (sign)
+    {
+        case STAR:  return weights[0];
+
+        case DOT:
+            *return_ch = c1;
+            return weights[2] + weights[0];
+
+        case SPACE:
+            *return_ch = c1;
+            return weights[3] + weights[0];
+
+        case COLON:
+            double dot_diff = weights[1] - weights[2];
+            double space_diff = weights[1] - weights[3];
+
+            if (!(dot_diff > 0 || space_diff > 0))     //  if both not greater than 0 (negative change or no change at all)
+                return 0;                              //  then, no score change and return the same character
+
+            if (space_diff > dot_diff)                 //  if SPACE subtitution is better than DOT
+            {
+                *return_ch = find_char_to_space(c1);   //  it allways posible to find another character that will provide a SPACE sign
+                return space_diff;                     //  score difference
+            }
+
+            //  otherwise, it will try to find a DOT subtitution, if not possible, SPACE subtitution
+            char dot_char = find_char_to_dot(c1);
+            if (dot_char == '\0' && space_diff > 0)     //  c1 is not in any semi conservative group, and SPACE subtitution is greater than no change
+            {
+                *return_ch = find_char_to_space(c1);
+                return space_diff; 
+            }
+
+            *return_ch = dot_char;
+            return dot_diff;
+    }
+    return 0;
 }
 
 //	find a character that is different than c, and is neither in a conservative, nor in a semi-conservative group with c
-char find_diff_char(char c)
+char find_char_to_space(char c)
 {
 	char other = c;
 	do
@@ -232,6 +276,25 @@ char find_diff_char(char c)
 		other = (other + 1) % NUM_CHARS + FIRST_CHAR;	//	get next letter cyclically
 	} while(is_conservative(c, other) || is_semi_conservative(c, other));		//	while it is conservative or semi
 	return other;
+}
+
+//	find a character that is different than c, and in a semi-conservative group with c, return \0 if c is not in any semi conservative group
+char find_char_to_dot(char c)
+{
+	for (int i = 0; i < SEMI_CONSERVATIVE_COUNT; i++)       //  iterate over the semi conservative groups
+    {
+        char* group = semi_conservatives_arr[i];
+        if (is_contain(group, c))                           //  if c in that group
+        {
+            int group_len = strlen(group);                  //  get group's length
+            for (int j = 0; j < group_len; j++)             //  iterate over the characters in the group and return the first character that is different than c
+            {
+                if (group[j] != c)
+                    return group[j];
+            }
+        }
+    }
+    return '\0';        //  c is not in any of the semi conservative groups
 }
 
 //  reads two sequences, weights, and the assignment type (maximum / minimum) from a input file
@@ -299,7 +362,7 @@ double evaluate_chars(char a, char b, double* weights, char* s)
         s = &temp;  //  in case the returned char is not required
     if      (a == b)                        { *s = STAR;  return weights[0]; }
     else if (is_conservative(a, b))         { *s = COLON; return -weights[1]; }
-    else if (is_semi_conservative(a, b))    { *s = POINT; return -weights[2]; }
+    else if (is_semi_conservative(a, b))    { *s = DOT; return -weights[2]; }
 
     *s = SPACE;
     return -weights[3];

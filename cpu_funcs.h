@@ -14,7 +14,9 @@ int is_semi_conservative(char c1, char c2);
 
 double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max);
 char find_char(char c1, char c2, double* weights, double* score, int (*eval_func)(double, double));
-char find_diff_char(char c);
+double find_max_char(char c1, char c2, double* weights, char* return_ch);
+char find_char_to_space(char c);
+char find_char_to_dot(char c);
 
 
 ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data);

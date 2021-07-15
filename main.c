@@ -10,6 +10,7 @@ int main(int argc, char* argv[])
     int  pid;			//	rank of process
 	int  num_processes;     //	number of processes
     double time = 0;
+    printf("sd\n");
 
     // MPI_Status status;
     /* create a type for data struct */
@@ -30,6 +31,9 @@ int main(int argc, char* argv[])
 
 	// MPI_Type_create_struct(NUM_OF_PARAMS, blocklengths, displacements, types, &mpi_data_type);
 	// MPI_Type_commit(&mpi_data_type);
+
+
+
 
     MPI_Init(&argc, &argv);	//	start MPI
     MPI_Comm_rank(MPI_COMM_WORLD, &pid);		//	get process rank
