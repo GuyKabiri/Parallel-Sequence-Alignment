@@ -13,10 +13,12 @@ int is_conservative(char c1, char c2);
 int is_semi_conservative(char c1, char c2);
 
 double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max);
-char find_char(char c1, char c2, double* weights, double* score, int (*eval_func)(double, double));
-double find_max_char(char c1, char c2, double* weights, char* return_ch);
-char find_char_to_space(char c);
-char find_char_to_dot(char c);
+void fill_hash(double* weights);
+void print_hash();
+double find_char(char c1, char c2, double* weights, char* return_ch, int is_max);
+double find_min_char(char c1, char c2, char sign, double* weights, char* return_ch);
+double find_max_char(char c1, char c2, char sign, double* weights, char* return_ch);
+char get_char_by_sign_with_restrictions(char by, char sign, char rest);
 
 
 ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data);

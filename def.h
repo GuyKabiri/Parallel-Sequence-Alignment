@@ -7,11 +7,20 @@
 #define SPACE   ' '     //  w4
 #define DASH    '-'
 
+#define STAR_W  0
+#define COLON_W 1
+#define DOT_W   2
+#define SPACE_W 3
+
 #define ROOT 0
 
 #define INPUT_FILE "./input/input2.dat"
 #define OUTPUT_FILE "./output/output.dat"
 
+#define TRUE 1
+#define FALSE 0
+
+#define NOT_FOUND_CHAR '\0'
 
 #define NUM_CHARS 26
 #define FIRST_CHAR 'A'

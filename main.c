@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
+#include <omp.h>
 
 #include "main.h"
 #include "cpu_funcs.h"
@@ -10,7 +11,7 @@ int main(int argc, char* argv[])
     int  pid;			//	rank of process
 	int  num_processes;     //	number of processes
     double time = 0;
-    printf("sd\n");
+    
 
     // MPI_Status status;
     /* create a type for data struct */
@@ -58,5 +59,6 @@ int main(int argc, char* argv[])
         printf("total time: %g\n", time);
 
 	MPI_Finalize();
+
     return 0;
 }
