@@ -4,9 +4,9 @@
 #include "def.h"
 
 typedef struct _mutant {
-    char mut[SEQ2_MAX_LEN];
-    int offset;
-    double score;
+    int char_offset;
+    char ch;
+    double mutant_diff;
 } Mutant;
 
 #endif //   __MUTANT_H__

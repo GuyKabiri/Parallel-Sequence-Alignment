@@ -7,6 +7,7 @@
 #include "cpu_funcs.h"
 #include "def.h"
 #include "program_data.h"
+#include "mutant.h"
 
 
 char conservatives_arr[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
@@ -71,20 +72,27 @@ void cpu_run_program(int pid, int num_processes)
 //    printf("pro %d: tasks: %d, start: %d, end: %d\n", pid, data.num_tasks, start_offset, data.num_tasks + start_offset);
 
 
-    char mutant[SEQ2_MAX_LEN] = { '\0' };
+    Mutant my_mutant;
 
     int best_offset = 0;
     double best_score = 0;
-    char best_mutant[SEQ2_MAX_LEN] = { '\0' };
+    Mutant best_mutant;
+
+    double curr_score, mutant_score;
 
     for (int i = start_offset; i < data.num_tasks + start_offset; i++)
     {
-        double score = find_best_mutant_offset(data.seq1, data.seq2, data.weights, i, mutant, data.is_max);
-        if (score > best_score)
+        curr_score = find_best_mutant_offset(data.seq1, data.seq2, data.weights, i, data.is_max, &my_mutant);
+        mutant_score = curr_score + my_mutant.mutant_diff;
+
+        if (mutant_score > best_score)
         {
-        	best_score = score;
+            best_mutant.ch = my_mutant.ch;
+            best_mutant.char_offset = my_mutant.char_offset;
+            best_mutant.mutant_diff = my_mutant.mutant_diff;
+
+            best_score = mutant_score;
         	best_offset = i;
-            strcpy(best_mutant, mutant);
         }
     }
 
@@ -107,15 +115,16 @@ void cpu_run_program(int pid, int num_processes)
     MPI_Status status;
     if (pid == sender_rank)    //  send only from the process with max score
     {
+        data.seq2[my_mutant.char_offset] = my_mutant.ch;
     	MPI_Send(&best_offset, 1, MPI_DOUBLE, ROOT, 0, MPI_COMM_WORLD);
-    	MPI_Send(best_mutant, SEQ2_MAX_LEN, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
+    	MPI_Send(data.seq2, SEQ2_MAX_LEN, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
     }
     if (pid == ROOT)
     {
     	best_score = globalmax[0];
     	MPI_Recv(&best_offset, 1, MPI_DOUBLE, sender_rank, 0, MPI_COMM_WORLD, &status);
-    	MPI_Recv(best_mutant, SEQ2_MAX_LEN, MPI_CHAR, sender_rank, 0, MPI_COMM_WORLD, &status);
-    	printf("best offset: %3d, by procs: %2d, score: %g\n%s\n", best_offset, sender_rank, best_score, best_mutant);
+    	MPI_Recv(data.seq2, SEQ2_MAX_LEN, MPI_CHAR, sender_rank, 0, MPI_COMM_WORLD, &status);
+    	printf("best offset: %3d, by procs: %2d, score: %g\n%s\n", best_offset, sender_rank, best_score, data.seq2);
     	FILE* out_file = fopen(OUTPUT_FILE, "w");
     	if (!out_file)
     	{
@@ -123,7 +132,7 @@ void cpu_run_program(int pid, int num_processes)
     		MPI_Abort(MPI_COMM_WORLD, 2);
 			exit(1);
     	}
-    	if (!write_results_to_file(out_file, best_mutant, best_offset, best_score))
+    	if (!write_results_to_file(out_file, data.seq2, best_offset, best_score))
     	{
     		printf("Error write to the output file %s\n", OUTPUT_FILE);
 			MPI_Abort(MPI_COMM_WORLD, 2);
@@ -131,7 +140,7 @@ void cpu_run_program(int pid, int num_processes)
     	}
     	fclose(out_file);
         
-        print_seq(data.seq1, best_mutant, data.weights, best_offset);
+        print_seq(data.seq1, data.seq2, data.weights, best_offset);
     }
 }
 
@@ -172,16 +181,6 @@ void print_hash()
     }
 }
 
-int is_greater(double a, double b)
-{
-	return a > b;
-}
-
-int is_smaller(double a, double b)
-{
-	return a < b;
-}
-
 //  check for the character c in the string s
 //  returns NULL if c is not presented in s, otherwise returns the address of the occurrence of c
 char* is_contain(char* s, char c)
@@ -207,179 +206,83 @@ int is_semi_conservative(char c1, char c2)
     return 0;
 }
 
+double get_weight(char sign, double* weights)
+{
+    double w;
+    switch (sign)
+    {
+    case STAR:  w = weights[STAR_W];    break;
+    case COLON: w = -weights[COLON_W];    break;
+    case DOT:   w = -weights[DOT_W];    break;
+    case SPACE: w = -weights[SPACE_W];    break;
+    default:    w = -1;    break;
+    }
+    return w;
+}
+
+char get_hash_sign(char c1, char c2)
+{
+    return char_hash[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
+}
+
 //  find the best mutant for a given offset
-double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, char* mutant, int is_max)
+double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, int is_max, Mutant* mt)
 {
     int seq1_idx, seq2_idx;
     double total_score = 0;
-    int iterations = strlen(seq2);      // TODO: change fmin with min
+    double pair_score, mutant_diff, best_mutant_diff;
+    int iterations = strlen(seq2);
     char ch;
 
     for (int i = 0; i < iterations; i++)          //  iterate over all the characters
     {
         seq1_idx = offset + i;
         seq2_idx = i;
+        char c1 = seq1[seq1_idx];
+        char c2 = seq2[seq2_idx];
+        pair_score = get_weight(get_hash_sign(c1, c2), weights);
+        total_score += pair_score;
 
-        double s = find_char(seq1[seq1_idx], seq2[seq2_idx], weights, &mutant[seq2_idx], is_max);
-        total_score += s;
+        ch = find_char(c1, c2, weights, is_max);
+        mutant_diff = get_weight(get_hash_sign(c1, ch), weights) - pair_score;
+
+        if (mutant_diff > best_mutant_diff)
+        {
+            best_mutant_diff = mutant_diff;
+            mt->ch = ch;
+            mt->char_offset = i;        //  offset of char inside seq2
+            mt->mutant_diff = mutant_diff;
+        }
     }
-
-    return total_score;           //  TODO: return new score
+    
+    return total_score;     //  best mutant is returned in struct mt
 }
 
-double find_char(char c1, char c2, double* weights, char* return_ch, int is_max)
+char find_char(char c1, char c2, double* weights, int is_max)
 {
     char sign = char_hash[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
-    // double curr_score;
-    // switch (sign)
-    // {
-    // case STAR:  curr_score = weights[0];    break;
-    // case COLON: curr_score = -weights[1];    break;
-    // case DOT:   curr_score = -weights[2];    break;
-    // case SPACE: curr_score = -weights[3];    break;
-    // default:    curr_score = -1;    break;
-    // }
+
     return  is_max ?
-            find_max_char(c1, c2, sign, weights, return_ch)   :
-            find_min_char(c1, c2, sign, weights, return_ch);
+            find_max_char(c1, c2, sign, weights)   :
+            find_min_char(c1, c2, sign, weights);
 }
 
-double find_min_char(char c1, char c2, char sign, double* weights, char* return_ch)
-{
-    //  TODO:   finish and re-write the minimum function
-    switch (sign)
-    {
-    case STAR:
-        double colon_diff = - weights[STAR_W] - weights[COLON_W];
-        double dot_diff = - weights[STAR_W] - weights[DOT_W];
-        double spcae_diff = - weights[STAR_W] - weights[SPACE_W];
 
-        if (!(colon_diff < 0 || dot_diff < 0 || spcae_diff < 0))        //  if any subtitution will not decrease the score
-        {                                                               //  than return the same letter and score
-            *return_ch = c2;
-            return weights[STAR_W];
-        }
-        
-        if (colon_diff <= dot_diff && colon_diff <= spcae_diff)             //  if COLON subtitiue is better than DOT and SPACE
-        {
-            char colon_char = get_char_by_sign_with_restrictions(c1, COLON, c2);                       //  find COLON subtitue (if possible)
-            if (colon_char != NOT_FOUND_CHAR && is_conservative)
-            if (colon_char == NOT_FOUND_CHAR && dot_diff < spcae_diff)      //  if did not found, and DOT subtitue is better than SPACE
-            {
-                char dot_char = get_char_by_sign_with_restrictions(c1, DOT, c2);
-                if (dot_char == NOT_FOUND_CHAR && spcae_diff < 0)
-                {
-                    *return_ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-                    return -weights[SPACE_W];
-                }
-                *return_ch = dot_char;
-                return -weights[DOT_W];
-            }
-            else if (colon_char == NOT_FOUND_CHAR && spcae_diff <= dot_diff)
-            {
-                *return_ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-                return -weights[SPACE_W];
-            }
-            else if (colon_char == NOT_FOUND_CHAR)              //  any subtitution is not possible
-            {
-                *return_ch = c2;
-                return weights[STAR_W];
-            }
-            //  otherwise, COLON subtitiution is possible
-            *return_ch = colon_char;
-            return -weights[COLON_W];
-        }
-        else if (dot_diff < colon_diff && dot_diff < spcae_diff)
-        {
-            char dot_char = get_char_by_sign_with_restrictions(c1, DOT, c2);
-            if (dot_char == NOT_FOUND_CHAR && colon_diff < spcae_diff)
-            {
-                char colon_char = get_char_by_sign_with_restrictions(c1, COLON, c2);
-                if (colon_char == NOT_FOUND_CHAR)
-                {
-                    *return_ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-                    return -weights[SPACE_W];
-                }
-                *return_ch = colon_char;
-                return -weights[COLON_W];
-            }
-            else if (dot_char == NOT_FOUND_CHAR && spcae_diff <= colon_diff)
-            {
-                *return_ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-                return -weights[SPACE_W];
-            }
-            else if (dot_char == NOT_FOUND_CHAR)        //  any subtitution is not possible
-            {
-                *return_ch = c2;
-                return weights[STAR_W];
-            }
-            //  otherwise, DOT subtitiution is possible
-            *return_ch = dot_char;
-            return -weights[DOT_W];
-        }
-        // else if (spcae_diff <= colon_diff && spcae_diff <= dot_diff)
-        // {
-            *return_ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-            return -weights[SPACE_W];
-        // }
-    case COLON:
-        double dot_diff = weights[COLON_W] - weights[DOT_W];
-        double space_diff = weights[COLON_W] - weights[SPACE_W];
 
-        if (!(dot_diff < 0 || space_diff < 0))      //  if COLON is better scoring than DOT or SPACE subtitiution
-        {
-            *return_ch = c2;
-            return -weights[COLON_W];
-        }
-
-        if (dot_diff < space_diff)              //  DOT subtitution is better than SPACE
-        {
-            *return_ch = get_char_by_sign_with_restrictions(c1, DOT, c2);
-            return -weights[DOT_W];
-        }
-        //  otherwise, SPACE subtitution is better than DOT
-        *return_ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-        return -weights[SPACE_W];
-    case SPACE:
-        double colon_diff = weights[SPACE_W] - weights[COLON_W];
-        double dot_diff = weights[SPACE_W] - weights[DOT_W];
-
-        if (!(dot_diff < 0 || colon_diff < 0))      //  if COLON is better scoring than DOT or SPACE subtitiution
-        {
-            *return_ch = c2;
-            return -weights[SPACE_W];
-        }
-
-        if (colon_diff < space_diff)              //  DOT subtitution is better than SPACE
-        {
-            *return_ch = get_char_by_sign_with_restrictions(c1, DOT, c2);
-            return -weights[DOT_W];
-        }
-        //  otherwise, SPACE subtitution is better than DOT
-        *return_ch = find_char_to_space(c1);
-        return -weights[SPACE_W];
-    }
-
-    return 0;
-}
-
-double find_max_char(char c1, char c2, char sign, double* weights, char* return_ch)
+char find_max_char(char c1, char c2, char sign, double* weights)
 {
     //  TODO: check maybe calculate signs array in parallel while decrease the computation time, over calculate each sign seperate
-    
+    char ch;
     switch (sign)
     {
     case STAR:
-        *return_ch = c2;
-        return weights[STAR_W];
+        return c2;
 
     case DOT:                   //  if there is DOT between two characters, a START subtitution is possible
-        *return_ch = c1;
-        return weights[STAR_W];
+        return c1;
 
     case SPACE:                 //  if there is SPACE between two characters, a START subtitution is possible
-        *return_ch = c1;
-        return weights[STAR_W];
+        return c1;
 
     case COLON:
         double dot_diff = weights[COLON_W] - weights[DOT_W];
@@ -387,28 +290,180 @@ double find_max_char(char c1, char c2, char sign, double* weights, char* return_
 
         if (!(dot_diff > 0 || space_diff > 0))      //  if both not greater than 0 (negative change or no change at all)
         {                                           //  then, no score change and return the same character
-            *return_ch = c2;
-            return -weights[COLON_W];
+            return c2;
         }
 
         if (space_diff > dot_diff)                 //  if SPACE subtitution is better than DOT
         {
-            *return_ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);   //  it allways posible to find another character that will provide a SPACE sign
-            return -weights[SPACE_W];                     //  score difference
+            ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
+            if (ch != NOT_FOUND_CHAR)       //  if found SPACE subtitution
+                return ch;
+            
+            //  if could not find SPACE subtitution, and DOT is better than no subtitution
+            if (dot_diff > 0)
+            {
+                ch = get_char_by_sign_with_restrictions(c1, DOT, c2);
+                if (ch != NOT_FOUND_CHAR)       //  if found DOT subtitution
+                    return ch;
+            }
+
+            //  otherwise, no subtitution found
+            return c2;
         }
 
-        //  otherwise, it will try to find a DOT subtitution, if not possible, SPACE subtitution
-        char dot_char = get_char_by_sign_with_restrictions(c1, DOT, c2);
-        if (dot_char == NOT_FOUND_CHAR && space_diff > 0)     //  c1 is not in any semi conservative group, and SPACE subtitution is greater than no change
+        //  otherwise, it will try to find DOT subtitution
+        ch = get_char_by_sign_with_restrictions(c1, DOT, c2);
+        if (ch != NOT_FOUND_CHAR)       //  if found DOT subtitution
+            return ch;
+
+        //  if could not find DOT subtitution, and SPACE is better than no subtitution
+        if (space_diff > 0)
         {
-            *return_ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-            return -weights[SPACE_W];
+            ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
+            if (ch != NOT_FOUND_CHAR)       //  if found SPACE subtitution
+                return ch;
         }
-        //  otherwise, DOT subtitution found
-        *return_ch = dot_char;
-        return -weights[DOT_W];
+
+        //  otherwise, no subtitution found
+        return c2;
+    // default:
+    //     ch = 'd';
+    //     return ch;
     }
-    return 0;
+    return c2;
+}
+
+
+char find_min_char(char c1, char c2, char sign, double* weights)
+{
+    char ch;
+
+    char colon_sub = get_char_by_sign_with_restrictions(c1, COLON, c2);
+    char dot_sub = get_char_by_sign_with_restrictions(c1, DOT, c2);
+    char space_sub = get_char_by_sign_with_restrictions(c1, SPACE, c2);
+
+    double colon_diff, dot_diff, space_diff;
+
+    switch (sign)
+    {
+    case STAR:
+        colon_diff = - weights[STAR_W] - weights[COLON_W];
+        dot_diff = - weights[STAR_W] - weights[DOT_W];
+        space_diff = - weights[STAR_W] - weights[SPACE_W];
+
+        if (!(colon_diff < 0 || dot_diff < 0 || space_diff < 0))    //  if any subtitution will not decrease the score
+            return c2;                                              //  than return the same letter and score
+
+        if (colon_diff < dot_diff && colon_diff < space_diff)
+        {
+            if (colon_sub != NOT_FOUND_CHAR)
+                return colon_sub;
+        }
+
+        //  could not find COLON subtitution
+        if (dot_diff < space_diff)
+        {
+            if (dot_sub != NOT_FOUND_CHAR)
+                return dot_sub;
+            
+            // could not find DOT subtitution and COLON is better than space
+            if (colon_diff < space_sub && colon_sub != NOT_FOUND_CHAR)
+                return colon_sub;
+        }
+
+        //  could not dinf DOT subtitution
+        if (space_diff < 0)
+        {
+            if (space_sub != NOT_FOUND_CHAR)
+                return space_sub;
+
+            // could not find SPACE subtitution, but DOT or COLON might still be better than nothing
+            if (colon_diff < dot_diff && colon_sub != NOT_FOUND_CHAR)
+                return colon_sub;
+
+            //  could not find neither SPACE, not COLON subtitution
+            if (dot_diff < 0 && dot_sub != NOT_FOUND_CHAR)
+                return dot_sub;
+        }
+
+        return c2;  //  could not find any subtitution
+    
+    case COLON:
+        dot_diff = weights[COLON_W] - weights[DOT_W];
+        space_diff = weights[COLON_W] - weights[SPACE_W];
+
+        if (!(dot_diff < 0 || space_diff < 0))      //  if any subtitution will not decrease the score
+            return c2;                              //  than return the same letter and score
+
+        if (dot_diff < space_diff)                  //  if DOT subtitution is better than SPACE
+        {
+            if (dot_sub != NOT_FOUND_CHAR)          //  if found DOT subtitution
+                return dot_sub;
+        }
+
+        if (space_diff < 0)
+        {
+            if (space_sub != NOT_FOUND_CHAR)
+                return space_sub;
+
+            //  could not find SPACE subtitution, but DOT might be better than nothing
+            if (dot_diff < 0 && dot_sub != NOT_FOUND_CHAR)
+                return dot_sub;
+        }
+        
+        return c2;  // could not find any subtitution
+
+    case DOT:
+        colon_diff = weights[DOT_W] - weights[COLON_W];
+        space_diff = weights[DOT_W] - weights[SPACE_W];
+
+        if (!(colon_diff < 0 && space_diff < 0))    //  if any subtitution will not decrease the score
+            return c2;                              //  than return the same letter and score
+
+        if (colon_diff < space_diff)                //  if COLON subtitution is better than SPACE   
+        {
+            if (colon_sub != NOT_FOUND_CHAR)
+                return colon_sub;
+        }
+
+        if (space_diff < 0)
+        {
+            if (space_sub != NOT_FOUND_CHAR)
+                return space_sub;
+            
+            //  could not find SPACE subtitution, but COLON might still be better than nothing
+            if (colon_diff < 0 && colon_sub != NOT_FOUND_CHAR)
+                return colon_sub;
+        }
+
+        return c2;  // could not find any subtitution
+
+    case SPACE:
+        colon_diff = weights[SPACE_W] - weights[COLON_W];
+        dot_diff = weights[SPACE_W] - weights[DOT_W];
+
+        if (!(colon_diff < 0 && dot_diff < 0))      //  if any subtitution will not decrease the score
+            return c2;                              //  than return the same letter and score
+
+        if (colon_diff < dot_diff)                  //  if COLON subtitution is better than DOT
+        {
+            if (colon_sub != NOT_FOUND_CHAR)        //  if found COLON subtitution
+                return colon_sub;
+        }
+
+        if (dot_diff < 0)
+        {
+            if (dot_sub != NOT_FOUND_CHAR)          //  if found DOT subtitution
+                return dot_sub;
+
+            //  could not find DOT subtitution, but COLON might still be better than nothing
+            if (colon_diff < 0 && colon_sub != NOT_FOUND_CHAR)
+                return colon_sub;
+        }
+
+        return c2;  // could not find any subtitution
+    }
+    return c2;      //  sign was not any of the legal signs
 }
 
 //  evaluate pair of characters, return their score, and suitable sign

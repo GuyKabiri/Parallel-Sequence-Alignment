@@ -41,10 +41,6 @@
 #define MINIMUM_FUNC "minimum"
 
 
-
-#define NOT_EVALUATED -999.5
-
-
 // enum eSign { eStar, eColon, ePoint, eSpace };
 
 
