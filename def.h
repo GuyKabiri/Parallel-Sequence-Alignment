@@ -14,7 +14,7 @@
 
 #define ROOT 0
 
-#define INPUT_FILE "./input/input2.dat"
+#define INPUT_FILE "./input/input.dat"
 #define OUTPUT_FILE "./output/output.dat"
 
 #define TRUE 1
