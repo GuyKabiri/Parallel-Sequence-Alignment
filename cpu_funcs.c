@@ -54,93 +54,52 @@ void cpu_run_program(int pid, int num_processes)
     MPI_Bcast(&data.is_max, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
     fill_hash(data.weights);
-    // if (pid == ROOT)
-    //     print_hash();
-
-    int curr_offset = data.num_tasks * pid;  //  each process will handle the same amount of tasks, the offset will be multiply by the process index + the additional offset
+#ifdef PRINT_SIGN_MAT
     if (pid == ROOT)
-    {
-        data.num_tasks += data.offset_add;
-        data.offset_add = 0;
-    }
-    else
-    {
-    	curr_offset += data.offset_add;
-    }
+        print_hash();
+#endif
 
     // printf("pid=%d, tasks=%d, start=%d\n", pid, data.num_tasks, curr_offset);
 
     Mutant my_mutant;
-
-    int best_offset = 0;
-    double best_score = 0;
-    Mutant best_mutant;
-
-    double curr_score, mutant_score;
-    
-    for (int i = 0; i < data.num_tasks; i++, curr_offset++)
-    {
-        curr_score = find_best_mutant_offset(data.seq1, data.seq2, data.weights, curr_offset, data.is_max, &my_mutant);
-
-        if (data.is_max)
-        {
-            mutant_score = curr_score + my_mutant.mutant_diff;
-            if (mutant_score > best_score || i == 0)
-            {
-                best_mutant = my_mutant;
-                best_score = mutant_score;
-                best_offset = curr_offset;
-            }
-        }
-        else
-        {
-            mutant_score = curr_score - my_mutant.mutant_diff;
-            if (mutant_score < best_score || i == 0)
-            {
-                best_mutant = my_mutant;
-                best_score = mutant_score;
-                best_offset = curr_offset;
-            }
-        }
-    }
-
-    MPI_Status status;
+    double best_score = find_best_mutant(pid, &data, &my_mutant);
 
     double my_best[2] = { 0 };
     my_best[0] = best_score;
     my_best[1] = pid;
     double gloabl_best[2] = { 0 };
 
+    //  MPI_Allreduce will find the MAX or MIN value that sent from all the processes
+    //  and send it to all processes with the process id that holds that value
     if (data.is_max)
         MPI_Allreduce(my_best, gloabl_best, 1, MPI_2DOUBLE_PRECISION, MPI_MAXLOC, MPI_COMM_WORLD);
     else
         MPI_Allreduce(my_best, gloabl_best, 1, MPI_2DOUBLE_PRECISION, MPI_MINLOC, MPI_COMM_WORLD);
-        
-    int sender = gloabl_best[1];
+    
+    int sender = gloabl_best[1];    //  the id of the process with the best value
 
+    //  if the sender is not the ROOT (ROOT does not need to send the best value to himself)
     if (sender != ROOT && pid == sender)
     {
-        MPI_Send(&best_offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
-        MPI_Send(&best_mutant.char_offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
-        MPI_Send(&best_mutant.ch, 1, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
+        MPI_Send(&my_mutant.offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
+        MPI_Send(&my_mutant.char_offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
+        MPI_Send(&my_mutant.ch, 1, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
     }
     
     if (pid == ROOT)
     {   
-        int p = 0;
-        if (sender != ROOT)
+        MPI_Status status;
+        if (sender != ROOT)     //  if ROOT process does not have the best score -> retrieve it from the process that does
         {
-            p = 1;
-            best_score = gloabl_best[0];
-    	    MPI_Recv(&best_offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
-    	    MPI_Recv(&best_mutant.char_offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
-    	    MPI_Recv(&best_mutant.ch, 1, MPI_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+            best_score = gloabl_best[0];        //  best score already sent to all processes by MPI_Allreduce
+    	    MPI_Recv(&my_mutant.offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
+    	    MPI_Recv(&my_mutant.char_offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
+    	    MPI_Recv(&my_mutant.ch, 1, MPI_CHAR, sender, 0, MPI_COMM_WORLD, &status);
         }
         
         char mut[SEQ2_MAX_LEN];
         strcpy(mut, data.seq2);
-        mut[best_mutant.char_offset] = best_mutant.ch;
-    	printf("\nbest offset=%3d, charoff=%3d, by procs=%2d, score=%g\n\n", best_offset, best_mutant.char_offset, p, best_score);
+        mut[my_mutant.char_offset] = my_mutant.ch;
 
     	FILE* out_file = fopen(OUTPUT_FILE, "w");
     	if (!out_file)
@@ -149,7 +108,7 @@ void cpu_run_program(int pid, int num_processes)
     		MPI_Abort(MPI_COMM_WORLD, 2);
 			exit(1);
     	}
-    	if (!write_results_to_file(out_file, data.seq2, best_offset, best_score))
+    	if (!write_results_to_file(out_file, data.seq2, my_mutant.offset, best_score))
     	{
     		printf("Error write to the output file %s\n", OUTPUT_FILE);
 			MPI_Abort(MPI_COMM_WORLD, 2);
@@ -157,8 +116,43 @@ void cpu_run_program(int pid, int num_processes)
     	}
     	fclose(out_file);
         
-        pretty_print_seq_mut(data.seq1, data.seq2, mut, data.weights, best_offset, best_mutant.char_offset);
+        pretty_print_seq_mut(data.seq1, data.seq2, mut, data.weights, my_mutant.offset, my_mutant.char_offset);
     }
+}
+
+double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
+{
+    int curr_offset = data->num_tasks * pid;  //  each process will handle the same amount of tasks, the offset will be multiply by the process index
+    if (pid == ROOT)
+    {
+        data->num_tasks += data->offset_add;    //  if there are extra tasks, ROOT process will do them
+        data->offset_add = 0;                   //  other processes will need extra offset so ROOT will take the extra tasks
+    }
+    else
+        curr_offset += data->offset_add;    //  the rest of the processes will skip the extra task that the ROOT took
+
+    double best_score, curr_score;
+    Mutant temp_mutant;
+
+    int to_save;
+    
+    for (int i = 0; i < data->num_tasks; i++, curr_offset++)    //  iterate for amount of tasks
+    {
+        //  clculate this offset score, and find the best mutant in that offset
+        curr_score = find_best_mutant_offset(data->seq1, data->seq2, data->weights, curr_offset, data->is_max, &temp_mutant);
+
+        to_save = (data->is_max) ?                  //  if this is a maximum problem
+                    (curr_score > best_score) :     //  save if the current score is greater than the best
+                    (curr_score < best_score);      //  otherwise, save if the current score is smaller than the best
+
+        if (to_save || i == 0)              //  if found better mutation, or it is the first iteration
+        {
+            *return_mutant = temp_mutant;
+            return_mutant->offset = curr_offset;
+            best_score = curr_score;
+        }
+    }
+    return best_score;
 }
 
 //  check for the character c in the string s
@@ -277,10 +271,11 @@ double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offs
             best_mutant_diff = mutant_diff;
             mt->ch = subtitue;
             mt->char_offset = i;        //  offset of char inside seq2
-            mt->mutant_diff = mutant_diff;
         }
-    }    
-    return total_score;     //  best mutant is returned in struct mt
+    }
+    if (is_max)
+        return total_score + best_mutant_diff;
+    return total_score - best_mutant_diff;     //  best mutant is returned in struct mt
 }
 
 char find_char(char c1, char c2, double* weights, int is_max)

@@ -15,6 +15,7 @@ void print_hash();
 char get_hash_sign(char c1, char c2);
 double get_weight(char sign, double* weights);
 
+double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant);
 double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, int is_max, Mutant* mt);
 char find_char(char c1, char c2, double* weights, int is_max);
 char find_min_char(char c1, char c2, char sign, double* weights);
