@@ -41,22 +41,12 @@ void cpu_run_program(int pid, int num_processes)
         }
         fclose(input_file);
 
-        int iterations = strlen(data.seq1) - strlen(data.seq2) + 1;
-
-        data.num_tasks = iterations / num_processes;
-        data.offset_add = iterations % num_processes;   //  if amount of offset does not divide by amount of processes, the root process will take the additional tasks
-
+        data.proc_count = num_processes;
         printf("%s\n", data.is_max ? "maximum" : "minimum");
     }
 
-    if (num_processes > 1)
+    if (num_processes > 1)      //  broadcast with MPI only if there are more processes
     {
-        // MPI_Bcast(data.seq1, SEQ1_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
-        // MPI_Bcast(data.seq2, SEQ2_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
-        // MPI_Bcast(data.weights, WEIGHTS_COUNT, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
-        // MPI_Bcast(&data.num_tasks, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
-        // MPI_Bcast(&data.offset_add, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
-        // MPI_Bcast(&data.is_max, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
         MPI_Bcast(&data, 1, mpi_data_type, ROOT, MPI_COMM_WORLD);
     }
    
@@ -65,8 +55,6 @@ void cpu_run_program(int pid, int num_processes)
     if (pid == ROOT)
         print_hash();
 #endif
-
-    // printf("pid=%d, tasks=%d, start=%d\n", pid, data.num_tasks, curr_offset);
 
     Mutant my_mutant;
     double best_score = find_best_mutant(pid, &data, &my_mutant);
@@ -132,28 +120,24 @@ void cpu_run_program(int pid, int num_processes)
 
 double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
 {
-    int first_offset = data->num_tasks * pid;  //  each process will handle the same amount of tasks, the offset will be multiply by the process index
-    if (pid == ROOT)
-    {
-        data->num_tasks += data->offset_add;    //  if there are extra tasks, ROOT process will do them
-        data->offset_add = 0;                   //  other processes will need extra offset so ROOT will take the extra tasks
-    }
-    else
-        first_offset += data->offset_add;    //  the rest of the processes will skip the extra task that the ROOT took
-    int last_offset = first_offset + data->num_tasks;
+    int total_tasks = strlen(data->seq1) - strlen(data->seq2) + 1;
+    int my_tasks = total_tasks / data->proc_count;
+
+    int first_offset = my_tasks * pid;  //  each process will handle the same amount of tasks, therefore, offset will be multiply by the process index
+    int last_offset = my_tasks + first_offset;
+    if (pid == data->proc_count - 1)    //  if the tasks do not divide by the number of processes, the last process will handle any additional tasks
+        last_offset += total_tasks % data->proc_count;
     
 
     double best_score, curr_score;
     Mutant temp_mutant;
     int to_save;
 
-    first_offset = 21;
     printf("start=%3d, end=%3d\n", first_offset, last_offset);
     
 // #pragma omp parallel for
     for (int curr_offset = first_offset; curr_offset < last_offset; curr_offset++)    //  iterate for amount of tasks
     {
-        // printf("%d\n", curr_offset);
         //  clculate this offset score, and find the best mutant in that offset
         curr_score = find_best_mutant_offset(data->seq1, data->seq2, data->weights, curr_offset, data->is_max, &temp_mutant);
 
@@ -170,7 +154,6 @@ double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
                 best_score = curr_score;
             }
         // }
-        break;
     }
     return best_score;
 }
@@ -210,26 +193,20 @@ char evaluate_chars(char a, char b, double* weights)
     return SPACE;
 }
 
+
 void fill_hash(double* weights, int pid)
 {
-
-// omp_set_nested(1);
-// omp_set_dynamic(0);
-// printf("available threads=%2d\n", omp_get_num_threads());
-// printf("max threads=%2d\n", omp_get_max_threads());
 #pragma omp parallel for
     for (int i = 0; i < NUM_CHARS; i++)
     {
         char c1 = FIRST_CHAR + i;               //  FIRST_CHAR = A -> therefore (FIRST_CHAR + i) will represent all characters from A to Z
-        for (int j = 0; j <= i; j++)
+        for (int j = 0; j <= i; j++)            //  it would be time-consuming to fill the top triangle of a hash table, because it is cyclic (hash[x][y] = hash[y][x])
         {
-            // printf("(%2d, %2d) tid=%2d pid=%2d threads=%2d max=%2d\n", i, j, omp_get_thread_num(), pid, omp_get_num_threads(), omp_get_max_threads());
             char c2 = FIRST_CHAR + j;
             char_hash[i][j] = evaluate_chars(c1, c2, weights);
             // char_hash[j][i] = char_hash[i][j];
         }
     }
-
 }
 
 void print_hash()
@@ -256,7 +233,7 @@ void print_hash()
 
 char get_hash_sign(char c1, char c2)
 {
-    if (c1 >= c2)
+    if (c1 >= c2)       //  only the bottom triangle of the hash table is full -> (hash[x][y] = hash[y][x])
         return char_hash[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
     return char_hash[c2 - FIRST_CHAR][c1 - FIRST_CHAR];
 }
@@ -534,11 +511,7 @@ ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)
     char func_type[FUNC_NAME_LEN];
     if (fscanf(file, "%s", func_type) != 1)   return NULL;
     data->is_max = strcmp(func_type, MAXIMUM_FUNC) == 0 ? 1 : 0;    //  saves '1' if it is a maximum, otherwise, saves '0'
-
-    //  divide the amount of offsets by 2 (each computers' tasks)
-    // data->start_offset = (strlen(data->seq1) - strlen(data->seq2) + 1) / 2;
-    data->num_tasks = 0;
-    data->offset_add = 0;
+    data->proc_count = 0;
 
     return data;
 }

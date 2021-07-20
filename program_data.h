@@ -8,10 +8,9 @@ typedef struct _data {
     char seq2[SEQ2_MAX_LEN];
     double weights[WEIGHTS_COUNT];
     int is_max;
-    int num_tasks;
-    int offset_add;
+    int proc_count;
 } ProgramData;
 
-#define NUM_OF_PARAMS 6
+#define NUM_OF_PARAMS 5
 
 #endif //__PROGRAM_DATA_H__

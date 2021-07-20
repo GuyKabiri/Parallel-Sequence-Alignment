@@ -19,19 +19,18 @@ int main(int argc, char* argv[])
 
     MPI_Status status;
     /* create a type for data struct */
-	
-					//	number of blocks for each parameter
-	int          	blocklengths[NUM_OF_PARAMS] = { SEQ1_MAX_LEN, SEQ2_MAX_LEN, WEIGHTS_COUNT, 1, 1, 1 };
+
+    				//	number of blocks for each parameter
+	int          	blocklengths[NUM_OF_PARAMS] = { SEQ1_MAX_LEN, SEQ2_MAX_LEN, WEIGHTS_COUNT, 1, 1 };
 	
 					//	offset of each parameter, calculated by size of previous parameters
 	MPI_Aint 		displacements[NUM_OF_PARAMS] = {    0,                              //  _data.seq1 offset
                                                         sizeof(char) * SEQ1_MAX_LEN,    //  _data.seq2 offset
                                                         sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN,      //  _data.weights offset
                                                         sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT,     //  _data.is_max offset
-                                                        sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT + sizeof(int),   //  _data.tasks offset
-                                                        sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT + sizeof(int) }; //  _data.offset_add offset
+                                                        sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT + sizeof(int) }; //  _data.proc_count
 
-	MPI_Datatype 	types[NUM_OF_PARAMS] = { MPI_CHAR, MPI_CHAR, MPI_DOUBLE, MPI_INT, MPI_INT, MPI_INT };
+	MPI_Datatype 	types[NUM_OF_PARAMS] = { MPI_CHAR, MPI_CHAR, MPI_DOUBLE, MPI_INT, MPI_INT };
 
 	MPI_Type_create_struct(NUM_OF_PARAMS, blocklengths, displacements, types, &mpi_data_type);
 	MPI_Type_commit(&mpi_data_type);
