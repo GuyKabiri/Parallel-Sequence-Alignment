@@ -5,7 +5,6 @@
 
 #include "main.h"
 #include "cpu_funcs.h"
-MPI_Datatype 	mpi_data_type;
 
 int main(int argc, char* argv[])
 {
@@ -32,8 +31,8 @@ int main(int argc, char* argv[])
 
 	MPI_Datatype 	types[NUM_OF_PARAMS] = { MPI_CHAR, MPI_CHAR, MPI_DOUBLE, MPI_INT, MPI_INT };
 
-	MPI_Type_create_struct(NUM_OF_PARAMS, blocklengths, displacements, types, &mpi_data_type);
-	MPI_Type_commit(&mpi_data_type);
+	MPI_Type_create_struct(NUM_OF_PARAMS, blocklengths, displacements, types, &program_data_type);
+	MPI_Type_commit(&program_data_type);
 
 
     if (argc == 2)
@@ -50,7 +49,8 @@ int main(int argc, char* argv[])
     if (num_processes == 1)
         omp_set_num_threads(1);
     else
-        omp_set_num_threads(MAX_THREADS / num_processes);
+        // omp_set_num_threads(MAX_THREADS / num_processes);
+        omp_set_num_threads(4);
 
     // time -= MPI_Wtime();    //  substract the mpi initiation time
     cpu_run_program(pid, num_processes);
@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
     if (pid == ROOT)
         printf("total time: %g\n", time);
 
-    MPI_Type_free(&mpi_data_type);
+    MPI_Type_free(&program_data_type);
 	MPI_Finalize();
 
     return 0;

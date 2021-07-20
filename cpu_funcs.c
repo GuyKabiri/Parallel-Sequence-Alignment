@@ -17,7 +17,7 @@ char char_hash[NUM_CHARS][NUM_CHARS];
 // #define PRINT_SIGN_MAT
 
 extern int cuda_percentage;
-extern MPI_Datatype mpi_data_type;
+extern MPI_Datatype program_data_type;
 
 void cpu_run_program(int pid, int num_processes)
 {
@@ -47,7 +47,7 @@ void cpu_run_program(int pid, int num_processes)
 
     if (num_processes > 1)      //  broadcast with MPI only if there are more processes
     {
-        MPI_Bcast(&data, 1, mpi_data_type, ROOT, MPI_COMM_WORLD);
+        MPI_Bcast(&data, 1, program_data_type, ROOT, MPI_COMM_WORLD);
     }
    
     fill_hash(data.weights, pid);
@@ -128,34 +128,48 @@ double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
     if (pid == data->proc_count - 1)    //  if the tasks do not divide by the number of processes, the last process will handle any additional tasks
         last_offset += total_tasks % data->proc_count;
     
+    double gloabl_score = 0;    //  global variable for the best score among all threads
+#pragma omp parallel
+{
+    double best_score = 0;      //  private variable for thread's best score
+    double curr_score;          //  private variable for thread's specific offset score
+    Mutant best_mutant;         //  private variable for thread's best mutant
+    Mutant temp_mutant;         //  private variable for thread's specific offset mutant
+    int to_save;                //  private variable whether to save the current score or not
 
-    double best_score, curr_score;
-    Mutant temp_mutant;
-    int to_save;
-
-    printf("start=%3d, end=%3d\n", first_offset, last_offset);
-    
-// #pragma omp parallel for
+#pragma omp for nowait//schedule(dynamic, 2)  //  each thread will calculate some of the process tasks and save it's best mutant
     for (int curr_offset = first_offset; curr_offset < last_offset; curr_offset++)    //  iterate for amount of tasks
-    {
+    {     
         //  clculate this offset score, and find the best mutant in that offset
         curr_score = find_best_mutant_offset(data->seq1, data->seq2, data->weights, curr_offset, data->is_max, &temp_mutant);
 
-        // #pragma omp critical
-        // {
-            to_save = (data->is_max) ?                  //  if this is a maximum problem
-                        (curr_score > best_score) :     //  save if the current score is greater than the best
-                        (curr_score < best_score);      //  otherwise, save if the current score is smaller than the best
+        to_save = (data->is_max) ?                  //  if this is a maximum problem
+                    (curr_score > best_score) :     //  save if the current score is greater than the best
+                    (curr_score < best_score);      //  otherwise, save if the current score is smaller than the best
 
-            if (to_save || curr_offset == first_offset)              //  if found better mutation, or it is the first iteration
-            {
-                *return_mutant = temp_mutant;
-                return_mutant->offset = curr_offset;
-                best_score = curr_score;
-            }
-        // }
+        if (to_save)              //  if found better mutation, or it is the first iteration
+        {
+            best_mutant = temp_mutant;
+            best_mutant.offset = curr_offset;
+            best_score = curr_score;
+        }
     }
-    return best_score;
+
+    //  synchronize writing to the global score
+    #pragma omp critical
+    {
+        to_save = (data->is_max) ?                  //  if this is a maximum problem
+                    (best_score > gloabl_score) :     //  save if the current score is greater than the best
+                    (best_score < gloabl_score);      //  otherwise, save if the current score is smaller than the best
+
+        if (to_save)
+        {
+            gloabl_score = best_score;
+            *return_mutant = best_mutant;
+        }
+    }
+}
+    return gloabl_score;
 }
 
 //  check for the character c in the string s
@@ -533,7 +547,7 @@ void pretty_print_seq_mut(char* seq1, char* seq2, char* mut, double* weights, in
     char signs[SEQ2_MAX_LEN] = { '\0' };
     double score = get_score_and_signs(seq1, seq2, weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
 
-    printf("Seq offset=%3d, Char offset=%3d, Original Score: %g\n", offset, char_offset, score);
+    printf("Original Score: %g\n", score);
 
     print_with_offset(signs, offset, char_offset);
     printf("\n");
@@ -551,7 +565,8 @@ void pretty_print_seq_mut(char* seq1, char* seq2, char* mut, double* weights, in
     print_with_offset(signs, offset, char_offset);
     printf("\n");
 
-    printf("Seq offset=%3d, Char offset=%3d, Mutation Score: %g\n", offset, char_offset, score);
+    printf("Mutation Score: %g\n", score);
+    printf("Seq offset=%3d, Char offset=%3d\n", offset, char_offset);
 }
 
 double get_score_and_signs(char* seq1, char* seq2, double* weights, int offset, char* signs)

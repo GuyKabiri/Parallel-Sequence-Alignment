@@ -40,7 +40,6 @@
 #define MAXIMUM_FUNC "maximum"
 #define MINIMUM_FUNC "minimum"
 
-
 // enum eSign { eStar, eColon, ePoint, eSpace };
 
 
