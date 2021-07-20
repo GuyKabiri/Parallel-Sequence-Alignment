@@ -1,35 +1,14 @@
 1.5 2.6 0.1 0.2
 LQRHKRTHTGEKPYEPSHLQYHERTHTGEKPYECHQCHQAFKKCSLLQRHKRTH
 HERTHTGEKPYECHQCRTAFKKCSLLQRHK
-minimum
+maximum
+
 
 1 1 1 1
-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARTHTGEKPYEPSHLQYHERTHTGEKPYECHQCGQAFKKCSLLQRHKRTHTGEKPYE
+PSHLQYHERTHTGEKPYECHQCGQAFKKCSLLQRHKRTHTGEKPYEPSHLQYHERTHTGEKPYECHQCGQAFKKCSLLQRHKRTHTGEKPYE
 PYECNQCGKAFSQHGLLQRHKRTHTGEKPYM
 maximum
 
-1 1 1 1
-YHERTHTGEKPYECHQCGQAFKKCSLLQRHKRTHTGEKPYEPSHLQYHERTHTGEKPYECHQCGQAFKKCSLLQRHKRTHTGEKPYE
-PYECNQCGKAFSQHGLLQRHKRTHTGEKPYM
-minimum
-
-
-
-
-1.5 0.1 0.3 0.2
-LQRHKRTHTGEKPYEPSHLQYHERTHTGEKPYECHQCHQAFKKCSLLQRHKRTH
-HERTHTGEKPYECHQCRTAFKKCSLLQRHK
-minimum
-
-offset=1   char offset=5  score=-25.4   mutant score=-29.5     char=T  mutant=A
-######################################################################################################
-######################################################################################################
-1.5 2.6 0.1 0.2
-LQRHKRTHTGEKPYEPSHLQYHERTHTGEKPYECHQCHQAFKKCSLLQRHKRTH
-HERTHTGEKPYECHQCRTAFKKCSLLQRHK
-minimum
-
-offset=1   char offset=5  score=-25.4   mutant score=-29.5     char=T  mutant=A
 ######################################################################################################
 ######################################################################################################
 1.5 2.6 0.1 0.2

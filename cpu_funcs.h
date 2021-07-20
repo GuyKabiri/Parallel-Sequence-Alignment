@@ -10,7 +10,7 @@ char* is_contain(char* s, char c);
 int is_conservative(char c1, char c2);
 int is_semi_conservative(char c1, char c2);
 char evaluate_chars(char a, char b, double* weights);
-void fill_hash(double* weights);
+void fill_hash(double* weights, int pid);
 void print_hash();
 char get_hash_sign(char c1, char c2);
 double get_weight(char sign, double* weights);

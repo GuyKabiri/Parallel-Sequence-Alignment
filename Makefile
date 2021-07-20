@@ -2,7 +2,7 @@ CFLAGS = -Wall
 LIBS = -lm
 C_FILES = main.c cpu_funcs.c
 CU_FILES = cuda_funcs.cu
-O_FILES = main.o c_funcs.o
+O_FILES = main.o c_funcs.o #cuda_funcs.o
 
 build:
 	mpicxx -fopenmp -c main.c -o main.o

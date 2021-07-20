@@ -14,7 +14,10 @@ char conservatives_arr[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NE
 char semi_conservatives_arr[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
 char char_hash[NUM_CHARS][NUM_CHARS];
 
+// #define PRINT_SIGN_MAT
+
 extern int cuda_percentage;
+extern MPI_Datatype mpi_data_type;
 
 void cpu_run_program(int pid, int num_processes)
 {
@@ -46,14 +49,18 @@ void cpu_run_program(int pid, int num_processes)
         printf("%s\n", data.is_max ? "maximum" : "minimum");
     }
 
-    MPI_Bcast(data.seq1, SEQ1_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
-    MPI_Bcast(data.seq2, SEQ2_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
-    MPI_Bcast(data.weights, WEIGHTS_COUNT, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
-    MPI_Bcast(&data.num_tasks, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
-    MPI_Bcast(&data.offset_add, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
-    MPI_Bcast(&data.is_max, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
-
-    fill_hash(data.weights);
+    if (num_processes > 1)
+    {
+        // MPI_Bcast(data.seq1, SEQ1_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
+        // MPI_Bcast(data.seq2, SEQ2_MAX_LEN, MPI_CHAR, ROOT, MPI_COMM_WORLD);
+        // MPI_Bcast(data.weights, WEIGHTS_COUNT, MPI_DOUBLE, ROOT, MPI_COMM_WORLD);
+        // MPI_Bcast(&data.num_tasks, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+        // MPI_Bcast(&data.offset_add, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+        // MPI_Bcast(&data.is_max, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+        MPI_Bcast(&data, 1, mpi_data_type, ROOT, MPI_COMM_WORLD);
+    }
+   
+    fill_hash(data.weights, pid);
 #ifdef PRINT_SIGN_MAT
     if (pid == ROOT)
         print_hash();
@@ -71,10 +78,13 @@ void cpu_run_program(int pid, int num_processes)
 
     //  MPI_Allreduce will find the MAX or MIN value that sent from all the processes
     //  and send it to all processes with the process id that holds that value
-    if (data.is_max)
-        MPI_Allreduce(my_best, gloabl_best, 1, MPI_2DOUBLE_PRECISION, MPI_MAXLOC, MPI_COMM_WORLD);
-    else
-        MPI_Allreduce(my_best, gloabl_best, 1, MPI_2DOUBLE_PRECISION, MPI_MINLOC, MPI_COMM_WORLD);
+    if (num_processes > 1)
+    {
+        if (data.is_max)
+            MPI_Allreduce(my_best, gloabl_best, 1, MPI_2DOUBLE_PRECISION, MPI_MAXLOC, MPI_COMM_WORLD);
+        else
+            MPI_Allreduce(my_best, gloabl_best, 1, MPI_2DOUBLE_PRECISION, MPI_MINLOC, MPI_COMM_WORLD);
+    }
     
     int sender = gloabl_best[1];    //  the id of the process with the best value
 
@@ -122,35 +132,40 @@ void cpu_run_program(int pid, int num_processes)
 
 double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
 {
-    int curr_offset = data->num_tasks * pid;  //  each process will handle the same amount of tasks, the offset will be multiply by the process index
+    int first_offset = data->num_tasks * pid;  //  each process will handle the same amount of tasks, the offset will be multiply by the process index
     if (pid == ROOT)
     {
         data->num_tasks += data->offset_add;    //  if there are extra tasks, ROOT process will do them
         data->offset_add = 0;                   //  other processes will need extra offset so ROOT will take the extra tasks
     }
     else
-        curr_offset += data->offset_add;    //  the rest of the processes will skip the extra task that the ROOT took
+        first_offset += data->offset_add;    //  the rest of the processes will skip the extra task that the ROOT took
+    int last_offset = first_offset + data->num_tasks;
 
     double best_score, curr_score;
     Mutant temp_mutant;
-
     int to_save;
     
-    for (int i = 0; i < data->num_tasks; i++, curr_offset++)    //  iterate for amount of tasks
+// #pragma omp parallel for
+    for (int curr_offset = first_offset; curr_offset < last_offset; curr_offset++)    //  iterate for amount of tasks
     {
+        // printf("%d\n", curr_offset);
         //  clculate this offset score, and find the best mutant in that offset
         curr_score = find_best_mutant_offset(data->seq1, data->seq2, data->weights, curr_offset, data->is_max, &temp_mutant);
 
-        to_save = (data->is_max) ?                  //  if this is a maximum problem
-                    (curr_score > best_score) :     //  save if the current score is greater than the best
-                    (curr_score < best_score);      //  otherwise, save if the current score is smaller than the best
+        // #pragma omp critical
+        // {
+            to_save = (data->is_max) ?                  //  if this is a maximum problem
+                        (curr_score > best_score) :     //  save if the current score is greater than the best
+                        (curr_score < best_score);      //  otherwise, save if the current score is smaller than the best
 
-        if (to_save || i == 0)              //  if found better mutation, or it is the first iteration
-        {
-            *return_mutant = temp_mutant;
-            return_mutant->offset = curr_offset;
-            best_score = curr_score;
-        }
+            if (to_save || curr_offset == first_offset)              //  if found better mutation, or it is the first iteration
+            {
+                *return_mutant = temp_mutant;
+                return_mutant->offset = curr_offset;
+                best_score = curr_score;
+            }
+        // }
     }
     return best_score;
 }
@@ -190,17 +205,26 @@ char evaluate_chars(char a, char b, double* weights)
     return SPACE;
 }
 
-void fill_hash(double* weights)
+void fill_hash(double* weights, int pid)
 {
+
+// omp_set_nested(1);
+// omp_set_dynamic(0);
+// printf("available threads=%2d\n", omp_get_num_threads());
+// printf("max threads=%2d\n", omp_get_max_threads());
+#pragma omp parallel for
     for (int i = 0; i < NUM_CHARS; i++)
     {
-        char c1 = FIRST_CHAR + i;               //  FIRST_CHAR = A -> therefore FIRST_CHAR + i will represent all characters from A to Z
-        for (int j = 0; j < NUM_CHARS; j++)
+        char c1 = FIRST_CHAR + i;               //  FIRST_CHAR = A -> therefore (FIRST_CHAR + i) will represent all characters from A to Z
+        for (int j = 0; j <= i; j++)
         {
+            // printf("(%2d, %2d) tid=%2d pid=%2d threads=%2d max=%2d\n", i, j, omp_get_thread_num(), pid, omp_get_num_threads(), omp_get_max_threads());
             char c2 = FIRST_CHAR + j;
             char_hash[i][j] = evaluate_chars(c1, c2, weights);
+            // char_hash[j][i] = char_hash[i][j];
         }
     }
+
 }
 
 void print_hash()
@@ -227,7 +251,9 @@ void print_hash()
 
 char get_hash_sign(char c1, char c2)
 {
-    return char_hash[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
+    if (c1 >= c2)
+        return char_hash[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
+    return char_hash[c2 - FIRST_CHAR][c1 - FIRST_CHAR];
 }
 
 double get_weight(char sign, double* weights)
@@ -297,8 +323,6 @@ char find_max_char(char c1, char c2, char sign, double* weights)
         return c2;
 
     case DOT:                   //  if there is DOT between two characters, a START subtitution is possible
-        return c1;
-
     case SPACE:                 //  if there is SPACE between two characters, a START subtitution is possible
         return c1;
 
@@ -483,12 +507,11 @@ char find_min_char(char c1, char c2, char sign, double* weights)
 
 char get_char_by_sign_with_restrictions(char by, char sign, char rest)
 {
-    int by_idx = by - FIRST_CHAR;
-    int rest_idx = rest - FIRST_CHAR;
-    for (int i = 0; i < NUM_CHARS; i++)
+    char last_char = FIRST_CHAR + NUM_CHARS;
+    for (char ch = FIRST_CHAR; ch < last_char; ch++)   //  iterate over alphabet (A-Z)
     {
-        if (char_hash[by_idx][i] == sign && char_hash[rest_idx][i] != COLON)
-            return i + FIRST_CHAR;
+        if (get_hash_sign(by, ch) == sign && get_hash_sign(rest, ch) != COLON)  //  if found character which is not in the same conservative group with the previous one
+            return ch;
     }
     return NOT_FOUND_CHAR;
 }

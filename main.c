@@ -5,40 +5,37 @@
 
 #include "main.h"
 #include "cpu_funcs.h"
+MPI_Datatype 	mpi_data_type;
 
 int main(int argc, char* argv[])
 {
     int  pid;			//	rank of process
 	int  num_processes;     //	number of processes
-    double time = 0;
+    double time = MPI_Wtime();
     
-
-    // MPI_Status status;
-    /* create a type for data struct */
-	// MPI_Datatype 	mpi_data_type;
-	
-	// 				//	number of blocks for each parameter
-	// int          	blocklengths[NUM_OF_PARAMS] = { SEQ1_MAX_LEN, SEQ2_MAX_LEN, WEIGHTS_COUNT, 1, 1, 1 };
-	
-	// 				//	offset of each parameter, calculated by size of previous parameters
-	// MPI_Aint 		displacements[NUM_OF_PARAMS] = {    0,                              //  _data.seq1 offset
-    //                                                     sizeof(char) * SEQ1_MAX_LEN,    //  _data.seq2 offset
-    //                                                     sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN,      //  _data.weights offset
-    //                                                     sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT,     //  _data.is_max offset
-    //                                                     sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT + sizeof(int),   //  _data.tasks offset
-    //                                                     sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT + sizeof(int) }; //  _data.offset_add offset
-
-	// MPI_Datatype 	types[NUM_OF_PARAMS] = { MPI_CHAR, MPI_CHAR, MPI_DOUBLE, MPI_INT, MPI_INT, MPI_INT };
-
-	// MPI_Type_create_struct(NUM_OF_PARAMS, blocklengths, displacements, types, &mpi_data_type);
-	// MPI_Type_commit(&mpi_data_type);
-
-
-
-
     MPI_Init(&argc, &argv);	//	start MPI
     MPI_Comm_rank(MPI_COMM_WORLD, &pid);		//	get process rank
 	MPI_Comm_size(MPI_COMM_WORLD, &num_processes);	//	get number of processes
+
+    MPI_Status status;
+    /* create a type for data struct */
+	
+					//	number of blocks for each parameter
+	int          	blocklengths[NUM_OF_PARAMS] = { SEQ1_MAX_LEN, SEQ2_MAX_LEN, WEIGHTS_COUNT, 1, 1, 1 };
+	
+					//	offset of each parameter, calculated by size of previous parameters
+	MPI_Aint 		displacements[NUM_OF_PARAMS] = {    0,                              //  _data.seq1 offset
+                                                        sizeof(char) * SEQ1_MAX_LEN,    //  _data.seq2 offset
+                                                        sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN,      //  _data.weights offset
+                                                        sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT,     //  _data.is_max offset
+                                                        sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT + sizeof(int),   //  _data.tasks offset
+                                                        sizeof(char) * SEQ1_MAX_LEN + sizeof(char) * SEQ2_MAX_LEN + sizeof(double) * WEIGHTS_COUNT + sizeof(int) }; //  _data.offset_add offset
+
+	MPI_Datatype 	types[NUM_OF_PARAMS] = { MPI_CHAR, MPI_CHAR, MPI_DOUBLE, MPI_INT, MPI_INT, MPI_INT };
+
+	MPI_Type_create_struct(NUM_OF_PARAMS, blocklengths, displacements, types, &mpi_data_type);
+	MPI_Type_commit(&mpi_data_type);
+
 
     if (argc == 2)
     {
@@ -51,13 +48,20 @@ int main(int argc, char* argv[])
         }
     }
 
-    time -= MPI_Wtime();    //  substract the mpi initiation time
+    if (num_processes == 1)
+        omp_set_num_threads(1);
+    else
+        omp_set_num_threads(MAX_THREADS / num_processes);
+
+    // time -= MPI_Wtime();    //  substract the mpi initiation time
     cpu_run_program(pid, num_processes);
-    time += MPI_Wtime();    //  get program time
+    // time += MPI_Wtime();    //  get program time
+    time = MPI_Wtime() - time;    //  get program time
 
     if (pid == ROOT)
         printf("total time: %g\n", time);
 
+    MPI_Type_free(&mpi_data_type);
 	MPI_Finalize();
 
     return 0;
