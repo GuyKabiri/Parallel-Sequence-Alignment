@@ -141,10 +141,14 @@ double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
     else
         first_offset += data->offset_add;    //  the rest of the processes will skip the extra task that the ROOT took
     int last_offset = first_offset + data->num_tasks;
+    
 
     double best_score, curr_score;
     Mutant temp_mutant;
     int to_save;
+
+    first_offset = 21;
+    printf("start=%3d, end=%3d\n", first_offset, last_offset);
     
 // #pragma omp parallel for
     for (int curr_offset = first_offset; curr_offset < last_offset; curr_offset++)    //  iterate for amount of tasks
@@ -166,6 +170,7 @@ double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
                 best_score = curr_score;
             }
         // }
+        break;
     }
     return best_score;
 }
@@ -229,21 +234,21 @@ void fill_hash(double* weights, int pid)
 
 void print_hash()
 {
+    char last_char = FIRST_CHAR + NUM_CHARS;
     printf("   ");
-    for (int i = 0; i < NUM_CHARS; i++)
-        printf("%c ", i + FIRST_CHAR);
+    for (int i = FIRST_CHAR; i < last_char; i++)
+        printf("%c ", i);
     printf("\n");
     printf("   ");
-    for (int i = 0; i < NUM_CHARS; i++)
+    for (int i = FIRST_CHAR; i < last_char; i++)
         printf("__");
     printf("\n");
-    for (int i = 0; i < NUM_CHARS; i++)
+    for (int i = FIRST_CHAR; i < last_char; i++)
     {
-        char c1 = FIRST_CHAR + i;               //  FIRST_CHAR = A -> therefore FIRST_CHAR + i will represent all characters from A to Z
-        printf("%c |", c1);
-        for (int j = 0; j < NUM_CHARS; j++)
+        printf("%c |", i);
+        for (int j = FIRST_CHAR; j < last_char; j++)
         {
-            printf("%c ", char_hash[i][j]);
+            printf("%c ", get_hash_sign(i, j));
         }
         printf("\n");
     }
@@ -287,7 +292,6 @@ double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offs
         pair_score = get_weight(get_hash_sign(c1, c2), weights);    //  get weight before substitution
         total_score += pair_score;
 
-
         subtitue = find_char(c1, c2, weights, is_max);
         mutant_diff = get_weight(get_hash_sign(c1, subtitue), weights) - pair_score;    //  difference between original and mutation weights
         mutant_diff = abs(mutant_diff);
@@ -306,7 +310,7 @@ double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offs
 
 char find_char(char c1, char c2, double* weights, int is_max)
 {
-    char sign = char_hash[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
+    char sign = get_hash_sign(c1, c2);
 
     return  is_max ?
             find_max_char(c1, c2, sign, weights)   :
@@ -556,7 +560,7 @@ void pretty_print_seq_mut(char* seq1, char* seq2, char* mut, double* weights, in
     char signs[SEQ2_MAX_LEN] = { '\0' };
     double score = get_score_and_signs(seq1, seq2, weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
 
-    printf("Original Score: %g\n", score);
+    printf("Seq offset=%3d, Char offset=%3d, Original Score: %g\n", offset, char_offset, score);
 
     print_with_offset(signs, offset, char_offset);
     printf("\n");
@@ -574,7 +578,7 @@ void pretty_print_seq_mut(char* seq1, char* seq2, char* mut, double* weights, in
     print_with_offset(signs, offset, char_offset);
     printf("\n");
 
-    printf("Mutation Score: %g\n", score);
+    printf("Seq offset=%3d, Char offset=%3d, Mutation Score: %g\n", offset, char_offset, score);
 }
 
 double get_score_and_signs(char* seq1, char* seq2, double* weights, int offset, char* signs)
