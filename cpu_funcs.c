@@ -10,11 +10,8 @@
 #include "mutant.h"
 
 
-char conservatives_arr[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
-char semi_conservatives_arr[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
-char char_hash[NUM_CHARS][NUM_CHARS];
 
-// #define PRINT_SIGN_MAT
+#define PRINT_SIGN_MAT
 
 extern int cuda_percentage;
 extern MPI_Datatype program_data_type;
@@ -49,12 +46,6 @@ void cpu_run_program(int pid, int num_processes)
     {
         MPI_Bcast(&data, 1, program_data_type, ROOT, MPI_COMM_WORLD);
     }
-   
-    fill_hash(data.weights, pid);
-#ifdef PRINT_SIGN_MAT
-    if (pid == ROOT)
-        print_hash();
-#endif
 
     Mutant my_mutant;
     double best_score = find_best_mutant(pid, &data, &my_mutant);
@@ -120,6 +111,12 @@ void cpu_run_program(int pid, int num_processes)
 
 double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
 {
+        fill_hash(data->weights, pid);
+#ifdef PRINT_SIGN_MAT
+    if (pid == ROOT)
+        print_hash();
+#endif
+
     int total_tasks = strlen(data->seq1) - strlen(data->seq2) + 1;
     int my_tasks = total_tasks / data->proc_count;
 
@@ -218,7 +215,6 @@ void fill_hash(double* weights, int pid)
         {
             char c2 = FIRST_CHAR + j;
             char_hash[i][j] = evaluate_chars(c1, c2, weights);
-            // char_hash[j][i] = char_hash[i][j];
         }
     }
 }
