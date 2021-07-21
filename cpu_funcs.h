@@ -19,7 +19,7 @@ void print_hash();
 char get_hash_sign(char c1, char c2);
 double get_weight(char sign, double* weights);
 
-double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant);
+double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset);
 double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, int is_max, Mutant* mt);
 char find_char(char c1, char c2, double* weights, int is_max);
 char find_min_char(char c1, char c2, char sign, double* weights);
@@ -29,7 +29,7 @@ char get_char_by_sign_with_restrictions(char by, char sign, char rest);
 ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data);
 int write_results_to_file(FILE* file, char* mutant, int offset, double score);
 
-void pretty_print_seq_mut(char* seq1, char* seq2, char* mut, double* weights, int offset, int char_offset);
+void pretty_print(ProgramData* data, char* mut, int offset, int char_offset);
 double get_score_and_signs(char* seq1, char* seq2, double* weights, int offset, char* signs);
 void print_with_offset(char* chrs, int offset, int char_offset);
 

@@ -8,10 +8,9 @@
 #include "def.h"
 #include "program_data.h"
 #include "mutant.h"
+#include "cuda_funcs.h"
 
-
-
-#define PRINT_SIGN_MAT
+// #define PRINT_SIGN_MAT
 
 extern int cuda_percentage;
 extern MPI_Datatype program_data_type;
@@ -39,7 +38,6 @@ void cpu_run_program(int pid, int num_processes)
         fclose(input_file);
 
         data.proc_count = num_processes;
-        printf("%s\n", data.is_max ? "maximum" : "minimum");
     }
 
     if (num_processes > 1)      //  broadcast with MPI only if there are more processes
@@ -47,8 +45,35 @@ void cpu_run_program(int pid, int num_processes)
         MPI_Bcast(&data, 1, program_data_type, ROOT, MPI_COMM_WORLD);
     }
 
+
+    int total_tasks = strlen(data.seq1) - strlen(data.seq2) + 1;
+
+
+    int per_proc_tasks = total_tasks / data.proc_count;
+
+    int first_offset = per_proc_tasks * pid;  //  each process will handle the same amount of tasks, therefore, offset will be multiply by the process index
+    int last_offset = per_proc_tasks + first_offset;
+    if (pid == data.proc_count - 1)    //  if the tasks do not divide by the number of processes, the last process will handle any additional tasks
+        last_offset += total_tasks % data.proc_count;
+
+    int gpu_tasks = (last_offset - first_offset) * cuda_percentage / 100;
+    int gpu_first_offset = first_offset;
+    int gpu_last_offset = gpu_first_offset + gpu_tasks;
+
+    int cpu_tasks = (last_offset - first_offset) - gpu_tasks;
+    int cpu_first_offset = gpu_last_offset;
+    int cpu_last_offset = cpu_first_offset + cpu_tasks;
+
+    // printf("pid %2d, total=%d, cuda start=%d, cuda end=%d, cpu start=%d, cpu end=%d\n", pid, total_tasks, gpu_first_offset, gpu_last_offset, cpu_first_offset, cpu_last_offset);
+
+
+    Mutant gpu_mutant;
+    gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
+
+
+
     Mutant my_mutant;
-    double best_score = find_best_mutant(pid, &data, &my_mutant);
+    double best_score = find_best_mutant(pid, &data, &my_mutant, cpu_first_offset, cpu_last_offset);
 
     double my_best[2] = { 0 };
     my_best[0] = best_score;
@@ -105,11 +130,11 @@ void cpu_run_program(int pid, int num_processes)
     	}
     	fclose(out_file);
         
-        pretty_print_seq_mut(data.seq1, data.seq2, mut, data.weights, my_mutant.offset, my_mutant.char_offset);
+        pretty_print(&data, mut, my_mutant.offset, my_mutant.char_offset);
     }
 }
 
-double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
+double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset)
 {
         fill_hash(data->weights, pid);
 #ifdef PRINT_SIGN_MAT
@@ -117,13 +142,7 @@ double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
         print_hash();
 #endif
 
-    int total_tasks = strlen(data->seq1) - strlen(data->seq2) + 1;
-    int my_tasks = total_tasks / data->proc_count;
-
-    int first_offset = my_tasks * pid;  //  each process will handle the same amount of tasks, therefore, offset will be multiply by the process index
-    int last_offset = my_tasks + first_offset;
-    if (pid == data->proc_count - 1)    //  if the tasks do not divide by the number of processes, the last process will handle any additional tasks
-        last_offset += total_tasks % data->proc_count;
+    
     
     double gloabl_score = 0;    //  global variable for the best score among all threads
 #pragma omp parallel
@@ -150,6 +169,7 @@ double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant)
             best_mutant.offset = curr_offset;
             best_score = curr_score;
         }
+        // printf("pid %2d, tid %2d, offset %3d\n", pid, omp_get_thread_num(), curr_offset);
     }
 
     //  synchronize writing to the global score
@@ -536,27 +556,31 @@ int write_results_to_file(FILE* file, char* mutant, int offset, double score)
 }
 
 //  pretty printing the sequences and the character-wise comparation between them
-void pretty_print_seq_mut(char* seq1, char* seq2, char* mut, double* weights, int offset, int char_offset)
+void pretty_print(ProgramData* data, char* mut, int offset, int char_offset)
 {
-    if (!seq1 || !seq2 || !mut || !weights)  return;
+    if (!data || !mut)  return;
 
     char signs[SEQ2_MAX_LEN] = { '\0' };
-    double score = get_score_and_signs(seq1, seq2, weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
+    double score = get_score_and_signs(data->seq1, data->seq2, data->weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
 
-    printf("Original Score: %g\n", score);
+    printf("%s problem\n", data->is_max ? "Maximum" : "Minimum");
+    printf("Weights: ");
+    for (int i = 0; i < WEIGHTS_COUNT; i++)
+        printf("%g ", data->weights[i]);
+    printf("\nOriginal Score: %g\n", score);
 
     print_with_offset(signs, offset, char_offset);
     printf("\n");
 
-    print_with_offset(seq2, offset, char_offset);
+    print_with_offset(data->seq2, offset, char_offset);
     printf("\n");
     
-    printf("%s\n", seq1);       //  print 1st sequence
+    printf("%s\n", data->seq1);       //  print 1st sequence
 
     print_with_offset(mut, offset, char_offset);
     printf("\n");
 
-    score = get_score_and_signs(seq1, mut, weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
+    score = get_score_and_signs(data->seq1, mut, data->weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
 
     print_with_offset(signs, offset, char_offset);
     printf("\n");
