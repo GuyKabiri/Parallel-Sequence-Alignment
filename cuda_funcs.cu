@@ -1,71 +1,53 @@
 #include <cuda_runtime.h>
 #include <helper_cuda.h>
-#include <string.h>
 #include "cuda_funcs.h"
+#include "def.h"
 
-__global__ void get_max_value_GPU(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset)
+__global__ void get_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;        //  calculate thread index in the arrays
     // printf("%2d, %2d, %2d\n", blockDim.x, blockDim.y, blockDim.z);
     // printf("%2d, %2d, %2d\n", blockIdx.x, blockIdx.y, blockIdx.z);
     // printf("%2d, %2d, %2d\n", threadIdx.x, threadIdx.y, threadIdx.z);
 
-    // printf("seq off=%3d, char off=%3d index=%3d val=%f\n", blockIdx.x, threadIdx.x, idx, scores[idx]);
-
-    int offsets = last_offset - first_offset;
-    int chars = gpustrlen(data->seq2);
-    int num_tasks = chars * offsets;
-
-    scores[idx] = -900;
-
-    // printf("seq off=%3d, char off=%3d index=%3d val=%f\n", blockIdx.x, threadIdx.x, idx, scores[idx]);
-
-    // int sum = 0;
-    // for (int i = idx; i < num_tasks; i += blockDim.x)
-    //     sum += scores[i];
-
-    // __shared__ int r[31];
-    // r[idx] = sum;
-    // __syncthreads();
-    // for (int size = blockDim.x/2; size>0; size/=2) { //uniform
-    //     if (idx<size)
-    //     r[idx] += r[idx+size];
-    //     __syncthreads();
-    // }
-    // if (idx == 0)   printf("---------------\nscore=%g\n", scores[idx]);
-
-    // int chars = strlen(data->seq2);
-    // int offsets = last_offset - first_offset;
-    // int num_tasks = offsets + chars;
-
-    // if (i >= num_tasks)
-    //     return;
-
-    // int seq_off = 0;
-    // int char_off = 0;
-    // printf("gpu tid %4d, offset %3d\n", i, my_offset);
+    // printf("index=%3d val=%f\n", idx, scores[idx]);
+    // printf("%c\n", char_hash_cuda[0][0]);
+    // fill_hashtable_gpu();
 
     
-}
 
-__device__ int gpustrlen(char* str)
-{
-    int count = 0;
-    char* t = str;
-    while (*t)
+
+    int offsets = last_offset - first_offset;
+
+    if (idx >= offsets)
     {
-        ++count;
-        ++t;
+        scores[idx] = 0;
+        return;
     }
-    return count;
+
+
+  
+}
+
+__device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mutant* mt)
+{
+    double total_score = 0;
+    int idx1, idx2;
+
+    int chars = strlen_gpu(data->seq2);
+
+    for (int i = 0; i < chars; i++)
+    {
+        idx1 = offset + i;
+        idx2 = i;
+
+
+    }
+    return -990;
 }
 
 
-/*
-    an array of mutants will be allocated, the size of array will be amount of offsets X amount of characters in seq2
-    that means each thread will have to evaluate only one pair of characters and returned their original score, the subtitution
-    and the difference in the score with the subtitution, scores need to be summed up, and optimal mutant difference need to be found (MAX / MIN)
-*/
+
 double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_offset, int last_offset)
 {
     // Error code to check return values for CUDA calls
@@ -78,8 +60,8 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
     double returned_score = -999;
 
     int offsets = last_offset - first_offset;
-    int chars = strlen(data->seq2);
-    int num_tasks = offsets * chars;
+    // int chars = strlen(data->seq2);
+    // int num_tasks = offsets * chars;
 
     err = cudaMalloc(&gpu_data, sizeof(ProgramData));
     if (err != cudaSuccess)
@@ -95,25 +77,31 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
         exit(EXIT_FAILURE);
     }
 
-    err = cudaMalloc(&gpu_mutant, num_tasks * sizeof(Mutant));
+    err = cudaMalloc(&gpu_mutant, offsets * sizeof(Mutant));
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to allocate device memory - %s\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
 
-    err = cudaMalloc(&scores, num_tasks * sizeof(double));
+    err = cudaMalloc(&scores, offsets * sizeof(double));
     if (err != cudaSuccess)
     {
         fprintf(stderr, "Failed to allocate device memory - %s\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
-    
+
+    dim3 threadsPerBlockHash(NUM_CHARS, NUM_CHARS);
+    dim3 numBlocksHash(1, 1);
+    fill_hashtable_gpu<<<numBlocksHash, threadsPerBlockHash>>>();
+
+
 
     // Launch the Kernel
-    int threadsPerBlock = chars;
-    int blocksPerGrid = offsets;
-    get_max_value_GPU<<<blocksPerGrid, threadsPerBlock, 0>>>(gpu_data, gpu_mutant, scores, first_offset, last_offset);
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (offsets + threadsPerBlock - 1) / threadsPerBlock;//offsets;
+    printf("blocks=%d, threads=%d\n", blocksPerGrid, threadsPerBlock);
+    get_best_mutant_gpu<<<blocksPerGrid, threadsPerBlock, 0>>>(gpu_data, gpu_mutant, scores, first_offset, last_offset);
     err = cudaGetLastError();
     if (err != cudaSuccess)
     {
@@ -125,7 +113,7 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
     err = cudaMemcpy(returned_mutant, &gpu_mutant[0], sizeof(Mutant), cudaMemcpyDeviceToHost);
     if (err != cudaSuccess)
     {
-        fprintf(stderr, "Failed to copy result array from device to host -%s\n", cudaGetErrorString(err));
+        fprintf(stderr, "Failed to copy result mutant from device to host -%s\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
 
@@ -133,7 +121,7 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
     err = cudaMemcpy(&returned_score, &scores[0], sizeof(double), cudaMemcpyDeviceToHost);
     if (err != cudaSuccess)
     {
-        fprintf(stderr, "Failed to copy result array from device to host -%s\n", cudaGetErrorString(err));
+        fprintf(stderr, "Failed to copy result score from device to host -%s\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
 
@@ -160,4 +148,77 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
 
     // printf("gpu finih\n");
     return returned_score;
+}
+
+
+
+
+
+
+
+
+
+
+
+__device__ int strlen_gpu(char* str)
+{
+    int count = 0;
+    char* t = str;
+    while (*t)
+    {
+        ++count;
+        ++t;
+    }
+    return count;
+}
+
+__device__ int is_contain_gpu(char* str, char c)
+{
+    char* t = str;
+
+    while (*t)
+    {
+        if (*t == c)
+            return 1;
+        
+        ++t;
+    }
+    return 0;
+}
+
+//  check if both characters present in the same conservative group
+__device__ int is_conservative_gpu(char c1, char c2)
+{
+    for (int i = 0; i < CONSERVATIVE_COUNT; i++)    //  iterate over the conservative groups
+        if (is_contain_gpu(conservatives_arr_cuda[i], c1) && is_contain_gpu(conservatives_arr_cuda[i], c2))   //  if both characters present
+            return 1;
+    return 0;
+}
+
+//  check if both characters present in the same semi-conservative group
+__device__ int is_semi_conservative_gpu(char c1, char c2)
+{
+    for (int i = 0; i < SEMI_CONSERVATIVE_COUNT; i++)   //  iterate over the semi-conservative groups
+            if (is_contain_gpu(semi_conservatives_arr_cuda[i], c1) && is_contain_gpu(semi_conservatives_arr_cuda[i], c2))   //  if both characters present
+                return 1;
+    return 0;
+}
+
+__device__ char evaluate_chars_gpu(char a, char b)
+{
+    if      (a == b)                        return STAR;
+    else if (is_conservative_gpu(a, b))         return COLON;
+    else if (is_semi_conservative_gpu(a, b))    return DOT;
+
+    return SPACE;
+}
+
+__global__ void fill_hashtable_gpu()
+{
+    int row = blockIdx.y*blockDim.y+threadIdx.y;
+    int col = blockIdx.x*blockDim.x+threadIdx.x;
+
+    char c1 = FIRST_CHAR + row;
+    char c2 = FIRST_CHAR + col;
+    char_hash_cuda[row][col] = evaluate_chars_gpu(c1, c2);
 }

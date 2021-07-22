@@ -4,16 +4,12 @@
 #include "program_data.h"
 #include "mutant.h"
 
-static char conservatives_arr[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
-static char semi_conservatives_arr[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
-static char char_hash[NUM_CHARS][NUM_CHARS];
-
 void cpu_run_program(int pid, int num_processes);
 
 char* is_contain(char* s, char c);
 int is_conservative(char c1, char c2);
 int is_semi_conservative(char c1, char c2);
-char evaluate_chars(char a, char b, double* weights);
+char evaluate_chars(char a, char b);
 void fill_hash(double* weights, int pid);
 void print_hash();
 char get_hash_sign(char c1, char c2);

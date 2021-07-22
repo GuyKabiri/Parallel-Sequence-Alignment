@@ -12,6 +12,9 @@
 
 // #define PRINT_SIGN_MAT
 
+extern char conservatives_arr[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN];
+extern char semi_conservatives_arr[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN];
+extern char char_hash[NUM_CHARS][NUM_CHARS];
 extern int cuda_percentage;
 extern MPI_Datatype program_data_type;
 
@@ -71,15 +74,16 @@ void cpu_run_program(int pid, int num_processes)
     Mutant gpu_mutant;
     Mutant my_mutant;
 
+    if (cpu_tasks > 0)
+    {
+        cpu_best_score = find_best_mutant_cpu(pid, &data, &my_mutant, cpu_first_offset, cpu_last_offset);
+    }
+
     if (gpu_tasks > 0)
     {
         gpu_best_score = gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
     }
 
-    if (cpu_tasks > 0)
-    {
-        cpu_best_score = find_best_mutant_cpu(pid, &data, &my_mutant, cpu_first_offset, cpu_last_offset);
-    }
     printf("cpu best score=%f\ngpu best score=%f\n", cpu_best_score, gpu_best_score);
 
     Mutant final_best_mutant = my_mutant;
@@ -230,7 +234,7 @@ int is_semi_conservative(char c1, char c2)
 }
 
 //  evaluate pair of characters, return their score, and suitable sign
-char evaluate_chars(char a, char b, double* weights)
+char evaluate_chars(char a, char b)
 {
     if      (a == b)                        return STAR;
     else if (is_conservative(a, b))         return COLON;
@@ -249,8 +253,9 @@ void fill_hash(double* weights, int pid)
         for (int j = 0; j <= i; j++)            //  it would be time-consuming to fill the top triangle of a hash table, because it is cyclic (hash[x][y] = hash[y][x])
         {
             char c2 = FIRST_CHAR + j;
-            char_hash[i][j] = evaluate_chars(c1, c2, weights);
+            char_hash[i][j] = evaluate_chars(c1, c2);
         }
+        char_hash[i][NUM_CHARS] = SPACE;    //  each char with '-' (hash[ch][-])
     }
 }
 
@@ -260,24 +265,34 @@ void print_hash()
     printf("   ");
     for (int i = FIRST_CHAR; i < last_char; i++)
         printf("%c ", i);
-    printf("\n");
+    printf("%c\n", DASH);
     printf("   ");
-    for (int i = FIRST_CHAR; i < last_char; i++)
+    for (int i = FIRST_CHAR; i < last_char + 1; i++)
         printf("__");
     printf("\n");
     for (int i = FIRST_CHAR; i < last_char; i++)
     {
         printf("%c |", i);
-        for (int j = FIRST_CHAR; j < last_char; j++)
+        for (int j = FIRST_CHAR; j < last_char + 1; j++)
         {
             printf("%c ", get_hash_sign(i, j));
         }
         printf("\n");
     }
+    printf("%c |", DASH);
+    for (int i = FIRST_CHAR; i < last_char; i++)
+    {
+        printf("%c ", get_hash_sign(DASH, i));
+    }
+    printf("%c ", get_hash_sign(DASH, DASH));
+    printf("\n");
 }
 
 char get_hash_sign(char c1, char c2)
 {
+    if (c1 > FIRST_CHAR + NUM_CHARS || c2 > FIRST_CHAR + NUM_CHARS)   return DASH;
+    if (c1 == DASH && c2 == DASH)   return STAR;
+    if (c1 == DASH || c2 == DASH)   return SPACE;
     if (c1 >= c2)       //  only the bottom triangle of the hash table is full -> (hash[x][y] = hash[y][x])
         return char_hash[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
     return char_hash[c2 - FIRST_CHAR][c1 - FIRST_CHAR];

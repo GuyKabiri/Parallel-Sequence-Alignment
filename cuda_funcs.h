@@ -11,13 +11,23 @@
 #include "program_data.h"
 #include "mutant.h"
 
-__constant__  char conservatives_arr_cuda[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
-__constant__  char semi_conservatives_arr_cuda[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
-__constant__  char char_hash_cuda[NUM_CHARS][NUM_CHARS];
-
 double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_offset, int last_offset);
 
-__global__ void get_max_value_GPU(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset);
-__device__ int gpustrlen(char* str);
+__global__ void get_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset);
+__device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mutant* mt);
+
+
+__constant__  char conservatives_arr_cuda[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
+__constant__  char semi_conservatives_arr_cuda[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
+__device__ char char_hash_cuda[NUM_CHARS][NUM_CHARS];
+
+__device__ int strlen_gpu(char* str);
+__device__ int is_contain_gpu(char* str, char c);
+__device__ int is_conservative_gpu(char c1, char c2);
+__device__ int is_semi_conservative_gpu(char c1, char c2);
+__device__ char evaluate_chars_gpu(char a, char b);
+__global__ void fill_hashtable_gpu();
+
+
 
 #endif //   __CUDA_FUNCS_H__
