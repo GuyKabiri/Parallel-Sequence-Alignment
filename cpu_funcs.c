@@ -300,7 +300,6 @@ char get_hash_sign(char c1, char c2)
 
 double get_weight(char sign, double* weights)
 {
-    double w;
     switch (sign)
     {
     case STAR:  return weights[STAR_W];
@@ -318,14 +317,14 @@ double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offs
     double total_score = 0;
     double pair_score, mutant_diff, best_mutant_diff;
     int iterations = strlen(seq2);
-    char subtitue;
+    char c1, c2, subtitue;
 
     for (int i = 0; i < iterations; i++)            //  iterate over all the characters
     {
         seq1_idx = offset + i;                      //  index of seq1
         seq2_idx = i;                               //  index of seq2
-        char c1 = seq1[seq1_idx];                   //  current char in seq1
-        char c2 = seq2[seq2_idx];                   //  current char in seq2
+        c1 = seq1[seq1_idx];                   //  current char in seq1
+        c2 = seq2[seq2_idx];                   //  current char in seq2
         pair_score = get_weight(get_hash_sign(c1, c2), weights);    //  get weight before substitution
         total_score += pair_score;
 
@@ -356,7 +355,6 @@ char find_char(char c1, char c2, double* weights, int is_max)
 
 char find_max_char(char c1, char c2, char sign, double* weights)
 {
-    //  TODO: check maybe calculate signs array in parallel while decrease the computation time, over calculate each sign seperate
     char ch;
     switch (sign)
     {
@@ -427,41 +425,25 @@ char find_min_char(char c1, char c2, char sign, double* weights)
     switch (sign)
     {
     case STAR:
-        colon_diff = - weights[STAR_W] - weights[COLON_W];
         dot_diff = - weights[STAR_W] - weights[DOT_W];
         space_diff = - weights[STAR_W] - weights[SPACE_W];
 
-        if (!(colon_diff < 0 || dot_diff < 0 || space_diff < 0))    //  if any subtitution will not decrease the score
+        if (!(dot_diff < 0 || space_diff < 0))    //  if any subtitution will not decrease the score
             return c2;                                              //  than return the same letter and score
 
-        if (colon_diff < dot_diff && colon_diff < space_diff)
-        {
-            if (colon_sub != NOT_FOUND_CHAR)
-                return colon_sub;
-        }
-
-        //  could not find COLON subtitution
         if (dot_diff < space_diff)
         {
             if (dot_sub != NOT_FOUND_CHAR)
                 return dot_sub;
-            
-            // could not find DOT subtitution and COLON is better than space
-            if (colon_diff < space_sub && colon_sub != NOT_FOUND_CHAR)
-                return colon_sub;
         }
 
-        //  could not dinf DOT subtitution
+        //  could not find DOT subtitution
         if (space_diff < 0)
         {
             if (space_sub != NOT_FOUND_CHAR)
                 return space_sub;
 
-            // could not find SPACE subtitution, but DOT or COLON might still be better than nothing
-            if (colon_diff < dot_diff && colon_sub != NOT_FOUND_CHAR)
-                return colon_sub;
-
-            //  could not find neither SPACE, not COLON subtitution
+            //  could not find SPACE subtitution, but DOT might be better than nothing
             if (dot_diff < 0 && dot_sub != NOT_FOUND_CHAR)
                 return dot_sub;
         }

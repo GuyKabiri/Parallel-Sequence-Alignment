@@ -7,7 +7,6 @@ typedef struct _mutant {
     int offset;
     int char_offset;
     char ch;
-    double score;
 } Mutant;
 
 #endif //   __MUTANT_H__
