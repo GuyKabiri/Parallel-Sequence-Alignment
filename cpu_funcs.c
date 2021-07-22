@@ -64,19 +64,34 @@ void cpu_run_program(int pid, int num_processes)
     int cpu_first_offset = gpu_last_offset;
     int cpu_last_offset = cpu_first_offset + cpu_tasks;
 
-    // printf("pid %2d, total=%d, cuda start=%d, cuda end=%d, cpu start=%d, cpu end=%d\n", pid, total_tasks, gpu_first_offset, gpu_last_offset, cpu_first_offset, cpu_last_offset);
+    printf("pid %2d, total=%d, cuda start=%d, cuda end=%d, cpu start=%d, cpu end=%d\n", pid, total_tasks, gpu_first_offset, gpu_last_offset, cpu_first_offset, cpu_last_offset);
 
-
+    double gpu_best_score = 0;
+    double cpu_best_score = 0;
     Mutant gpu_mutant;
-    gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
-
-
-
     Mutant my_mutant;
-    double best_score = find_best_mutant(pid, &data, &my_mutant, cpu_first_offset, cpu_last_offset);
+
+    if (gpu_tasks > 0)
+    {
+        gpu_best_score = gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
+    }
+
+    if (cpu_tasks > 0)
+    {
+        cpu_best_score = find_best_mutant_cpu(pid, &data, &my_mutant, cpu_first_offset, cpu_last_offset);
+    }
+    printf("cpu best score=%f\ngpu best score=%f\n", cpu_best_score, gpu_best_score);
+
+    Mutant final_best_mutant = my_mutant;
+    double final_best_score = cpu_best_score;
+    if ((data.is_max && gpu_best_score > cpu_best_score) || (!data.is_max && gpu_best_score < cpu_best_score))
+    {
+        final_best_mutant = gpu_mutant;
+        final_best_score = gpu_best_score;
+    }
 
     double my_best[2] = { 0 };
-    my_best[0] = best_score;
+    my_best[0] = final_best_score;
     my_best[1] = pid;
     double gloabl_best[2] = { 0 };
 
@@ -95,9 +110,9 @@ void cpu_run_program(int pid, int num_processes)
     //  if the sender is not the ROOT (ROOT does not need to send the best value to himself)
     if (sender != ROOT && pid == sender)
     {
-        MPI_Send(&my_mutant.offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
-        MPI_Send(&my_mutant.char_offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
-        MPI_Send(&my_mutant.ch, 1, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
+        MPI_Send(&final_best_mutant.offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
+        MPI_Send(&final_best_mutant.char_offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
+        MPI_Send(&final_best_mutant.ch, 1, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
     }
     
     if (pid == ROOT)
@@ -105,15 +120,15 @@ void cpu_run_program(int pid, int num_processes)
         MPI_Status status;
         if (sender != ROOT)     //  if ROOT process does not have the best score -> retrieve it from the process that does
         {
-            best_score = gloabl_best[0];        //  best score already sent to all processes by MPI_Allreduce
-    	    MPI_Recv(&my_mutant.offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
-    	    MPI_Recv(&my_mutant.char_offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
-    	    MPI_Recv(&my_mutant.ch, 1, MPI_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+            final_best_score = gloabl_best[0];        //  best score already sent to all processes by MPI_Allreduce
+    	    MPI_Recv(&final_best_mutant.offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
+    	    MPI_Recv(&final_best_mutant.char_offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
+    	    MPI_Recv(&final_best_mutant.ch, 1, MPI_CHAR, sender, 0, MPI_COMM_WORLD, &status);
         }
         
         char mut[SEQ2_MAX_LEN];
         strcpy(mut, data.seq2);
-        mut[my_mutant.char_offset] = my_mutant.ch;
+        mut[final_best_mutant.char_offset] = final_best_mutant.ch;
 
     	FILE* out_file = fopen(OUTPUT_FILE, "w");
     	if (!out_file)
@@ -122,7 +137,7 @@ void cpu_run_program(int pid, int num_processes)
     		MPI_Abort(MPI_COMM_WORLD, 2);
 			exit(1);
     	}
-    	if (!write_results_to_file(out_file, data.seq2, my_mutant.offset, best_score))
+    	if (!write_results_to_file(out_file, data.seq2, final_best_mutant.offset, final_best_score))
     	{
     		printf("Error write to the output file %s\n", OUTPUT_FILE);
 			MPI_Abort(MPI_COMM_WORLD, 2);
@@ -130,13 +145,13 @@ void cpu_run_program(int pid, int num_processes)
     	}
     	fclose(out_file);
         
-        pretty_print(&data, mut, my_mutant.offset, my_mutant.char_offset);
+        pretty_print(&data, mut, final_best_mutant.offset, final_best_mutant.char_offset);
     }
 }
 
-double find_best_mutant(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset)
+double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset)
 {
-        fill_hash(data->weights, pid);
+    fill_hash(data->weights, pid);
 #ifdef PRINT_SIGN_MAT
     if (pid == ROOT)
         print_hash();
@@ -540,7 +555,7 @@ ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)
     //  allocated space to read the assignment type
     char func_type[FUNC_NAME_LEN];
     if (fscanf(file, "%s", func_type) != 1)   return NULL;
-    data->is_max = strcmp(func_type, MAXIMUM_FUNC) == 0 ? 1 : 0;    //  saves '1' if it is a maximum, otherwise, saves '0'
+    data->is_max = strcmp(func_type, MAXIMUM_STR) == 0 ? MAXIMUM_FUNC : MINIMUM_FUNC;    //  saves '1' if it is a maximum, otherwise, saves '0'
     data->proc_count = 0;
 
     return data;

@@ -15,6 +15,9 @@ __constant__  char conservatives_arr_cuda[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_L
 __constant__  char semi_conservatives_arr_cuda[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
 __constant__  char char_hash_cuda[NUM_CHARS][NUM_CHARS];
 
-double gpu_run_program(ProgramData* data, Mutant* my_mutant, int first_offset, int last_offset);
+double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_offset, int last_offset);
+
+__global__ void get_max_value_GPU(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset);
+__device__ int gpustrlen(char* str);
 
 #endif //   __CUDA_FUNCS_H__

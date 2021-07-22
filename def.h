@@ -37,8 +37,10 @@
 #define WEIGHTS_COUNT 4
 
 #define FUNC_NAME_LEN 8         //  len(maximum) = len(minimum) = 7 + '\0' = 8
-#define MAXIMUM_FUNC "maximum"
-#define MINIMUM_FUNC "minimum"
+#define MAXIMUM_STR "maximum"
+#define MINIMUM_STR "minimum"
+#define MAXIMUM_FUNC 1
+#define MINIMUM_FUNC 0
 
 // enum eSign { eStar, eColon, ePoint, eSpace };
 
