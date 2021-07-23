@@ -12,7 +12,7 @@
 
 // #define PRINT_SIGN_MAT
 
-char char_hash[NUM_CHARS][NUM_CHARS];
+char hashtable_cpu[NUM_CHARS][NUM_CHARS];
 
 extern int cuda_percentage;
 extern MPI_Datatype program_data_type;
@@ -48,7 +48,6 @@ void cpu_run_program(int pid, int num_processes)
     }
 
     int total_tasks = strlen(data.seq1) - strlen(data.seq2) + 1;
-
 
     int per_proc_tasks = total_tasks / data.proc_count;
 
@@ -170,17 +169,17 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
 #endif
 
     
-    
-    double gloabl_score = 0;    //  global variable for the best score among all threads
+    //  global variable for the best score among all threads
+    double gloabl_score = data->is_max ? INT_MIN : INT_MAX;
 #pragma omp parallel
 {
-    double best_score = 0;      //  private variable for thread's best score
+    double best_score = data->is_max ? INT_MIN : INT_MAX;      //  private variable for thread's best score
     double curr_score;          //  private variable for thread's specific offset score
     Mutant best_mutant;         //  private variable for thread's best mutant
     Mutant temp_mutant;         //  private variable for thread's specific offset mutant
     int to_save;                //  private variable whether to save the current score or not
 
-#pragma omp for nowait//schedule(dynamic, 2)  //  each thread will calculate some of the process tasks and save it's best mutant
+#pragma omp for nowait      //  each thread will calculate some of the process tasks and save it's best mutant
     for (int curr_offset = first_offset; curr_offset < last_offset; curr_offset++)    //  iterate for amount of tasks
     {     
         //  clculate this offset score, and find the best mutant in that offset
@@ -197,6 +196,7 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
             best_score = curr_score;
         }
         // printf("pid %2d, tid %2d, offset %3d\n", pid, omp_get_thread_num(), curr_offset);
+                // printf("%d\n", curr_offset);
     }
 
     //  synchronize writing to the global score
@@ -225,9 +225,9 @@ void fill_hash(double* weights, int pid)
         for (int j = 0; j <= i; j++)            //  it would be time-consuming to fill the top triangle of a hash table, because it is cyclic (hash[x][y] = hash[y][x])
         {
             char c2 = FIRST_CHAR + j;
-            char_hash[i][j] = evaluate_chars(c1, c2);
+            hashtable_cpu[i][j] = evaluate_chars(c1, c2);
         }
-        char_hash[i][NUM_CHARS] = SPACE;    //  each char with '-' (hash[ch][-])
+        hashtable_cpu[i][NUM_CHARS] = SPACE;    //  each char with '-' (hash[ch][-])
     }
 }
 
@@ -267,7 +267,7 @@ double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offs
     double total_score = 0;
     double pair_score, mutant_diff, best_mutant_diff;
     int iterations = strlen(seq2);
-    char c1, c2, subtitue;
+    char c1, c2, substitute;
 
     for (int i = 0; i < iterations; i++)            //  iterate over all the characters
     {
@@ -278,14 +278,14 @@ double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offs
         pair_score = get_weight(get_hash_sign(c1, c2), weights);    //  get weight before substitution
         total_score += pair_score;
 
-        subtitue = find_char(c1, c2, weights, is_max);
-        mutant_diff = get_weight(get_hash_sign(c1, subtitue), weights) - pair_score;    //  difference between original and mutation weights
+        substitute = find_char(c1, c2, weights, is_max);
+        mutant_diff = get_weight(get_hash_sign(c1, substitute), weights) - pair_score;    //  difference between original and mutation weights
         mutant_diff = abs(mutant_diff);
 
         if (mutant_diff > best_mutant_diff || i == 0)
         {
             best_mutant_diff = mutant_diff;
-            mt->ch = subtitue;
+            mt->ch = substitute;
             mt->char_offset = i;        //  offset of char inside seq2
         }
     }

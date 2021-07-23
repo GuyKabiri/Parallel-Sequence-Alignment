@@ -5,13 +5,7 @@
 
 #define BLOCK_SIZE  256
 
-// #if (!(defined(__CUDA_ARCH__) && (__CUDA_ARCH__ > 0)))
-
-// extern char conservatives_arr[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN];
-// extern char semi_conservatives_arr[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN];
-extern char char_hash[NUM_CHARS][NUM_CHARS];
-
-// #endif
+extern char hashtable_cpu[NUM_CHARS][NUM_CHARS];
 
 __global__ void sumCommMultiBlock(double* scores, Mutant* mutants, int array_size, int is_max)
 {
@@ -106,7 +100,7 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
     int threadsPerBlock = BLOCK_SIZE;
     int blocksPerGrid = (offsets + threadsPerBlock - 1) / threadsPerBlock;//offsets;
     printf("blocks=%d, threads=%d\n", blocksPerGrid, threadsPerBlock);
-    get_best_mutant_gpu<<<blocksPerGrid, threadsPerBlock, 0>>>(gpu_data, gpu_mutant, scores, first_offset, last_offset);
+    find_best_mutant_gpu<<<blocksPerGrid, threadsPerBlock, 0>>>(gpu_data, gpu_mutant, scores, first_offset, last_offset);
     err = cudaGetLastError();
     if (err != cudaSuccess)
     {
@@ -170,7 +164,7 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
 }
 
 
-__global__ void get_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset)
+__global__ void find_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;        //  calculate thread index in the arrays
     // printf("%2d, %2d, %2d\n", blockDim.x, blockDim.y, blockDim.z);
@@ -205,7 +199,7 @@ __device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mut
     double total_score = 0;
     double pair_score, mutant_diff, best_mutant_diff;
     int iterations = strlen_gpu(data->seq2);
-    char c1, c2, subtitue;
+    char c1, c2, subtitute;
 
     for (int i = 0; i < iterations; i++)            //  iterate over all the characters
     {
@@ -216,15 +210,15 @@ __device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mut
         pair_score = get_weight(get_hash_sign(c1, c2), data->weights);    //  get weight before substitution
         total_score += pair_score;
 
-        subtitue = find_char(c1, c2, data->weights, data->is_max);
-        mutant_diff = get_weight(get_hash_sign(c1, subtitue), data->weights) - pair_score;    //  difference between original and mutation weights
+        subtitute = find_char(c1, c2, data->weights, data->is_max);
+        mutant_diff = get_weight(get_hash_sign(c1, subtitute), data->weights) - pair_score;    //  difference between original and mutation weights
         mutant_diff = abs(mutant_diff);
 
 
         if (mutant_diff > best_mutant_diff || i == 0)
         {
             best_mutant_diff = mutant_diff;
-            mt->ch = subtitue;
+            mt->ch = subtitute;
             mt->char_offset = i;        //  offset of char inside seq2
             mt->offset = offset;
         }
@@ -251,8 +245,8 @@ __host__  __device__ char find_max_char(char c1, char c2, char sign, double* w)
     case STAR:
         return c2;
 
-    case DOT:                   //  if there is DOT between two characters, a START subtitution is possible
-    case SPACE:                 //  if there is SPACE between two characters, a START subtitution is possible
+    case DOT:                   //  if there is DOT between two characters, a START substitution is possible
+    case SPACE:                 //  if there is SPACE between two characters, a START substitution is possible
         return c1;
 
     case COLON:
@@ -264,27 +258,27 @@ __host__  __device__ char find_max_char(char c1, char c2, char sign, double* w)
             return c2;
         }
 
-        if (space_diff > dot_diff)                 //  if SPACE subtitution is better than DOT
+        if (space_diff > dot_diff)                 //  if SPACE substitution is better than DOT
         {
             ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-            if (ch != NOT_FOUND_CHAR)       //  if found SPACE subtitution
+            if (ch != NOT_FOUND_CHAR)       //  if found SPACE substitution
                 return ch;
             
-            //  if could not find SPACE subtitution, and DOT is better than no subtitution
+            //  if could not find SPACE substitution, and DOT is better than no substitution
             if (dot_diff > 0)
             {
                 ch = get_char_by_sign_with_restrictions(c1, DOT, c2);
-                if (ch != NOT_FOUND_CHAR)       //  if found DOT subtitution
+                if (ch != NOT_FOUND_CHAR)       //  if found DOT substitution
                     return ch;
             }
 
-            //  otherwise, no subtitution found
+            //  otherwise, no substitution found
             return c2;
         }
 
-        //  otherwise, it will try to find DOT subtitution
+        //  otherwise, it will try to find DOT substitution
         ch = get_char_by_sign_with_restrictions(c1, DOT, c2);
-        if (ch != NOT_FOUND_CHAR)       //  if found DOT subtitution
+        if (ch != NOT_FOUND_CHAR)       //  if found DOT substitution
             return ch;
 
         //  if could not find DOT subtitution, and SPACE is better than no subtitution
@@ -434,11 +428,11 @@ __host__ __device__ char get_hash_sign(char c1, char c2)
 
     if (c1 >= c2)       //  only the bottom triangle of the hash table is full -> (hash[x][y] = hash[y][x])
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ > 0))
-        return char_hash_cuda[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
-    return char_hash_cuda[c2 - FIRST_CHAR][c1 - FIRST_CHAR];
+        return hashtable_gpu[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
+    return hashtable_gpu[c2 - FIRST_CHAR][c1 - FIRST_CHAR];
 #else
-        return char_hash[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
-    return char_hash[c2 - FIRST_CHAR][c1 - FIRST_CHAR];
+        return hashtable_cpu[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
+    return hashtable_cpu[c2 - FIRST_CHAR][c1 - FIRST_CHAR];
 #endif
 }
 
@@ -473,9 +467,9 @@ __host__ __device__ int is_conservative(char c1, char c2)
 {
     for (int i = 0; i < CONSERVATIVE_COUNT; i++)    //  iterate over the conservative groups
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ > 0))
-        if (is_contain(conservatives_arr_cuda[i], c1) && is_contain(conservatives_arr_cuda[i], c2))   //  if both characters present
+        if (is_contain(conservatives_gpu[i], c1) && is_contain(conservatives_gpu[i], c2))   //  if both characters present
 #else
-        if (is_contain(conservatives_arr[i], c1) && is_contain(conservatives_arr[i], c2))   //  if both characters present
+        if (is_contain(conservatives_cpu[i], c1) && is_contain(conservatives_cpu[i], c2))   //  if both characters present
 #endif
             return 1;
     return 0;
@@ -486,9 +480,9 @@ __host__ __device__ int is_semi_conservative(char c1, char c2)
 {
     for (int i = 0; i < SEMI_CONSERVATIVE_COUNT; i++)   //  iterate over the semi-conservative groups
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ > 0))
-            if (is_contain(semi_conservatives_arr_cuda[i], c1) && is_contain(semi_conservatives_arr_cuda[i], c2))   //  if both characters present
+            if (is_contain(semi_conservatives_gpu[i], c1) && is_contain(semi_conservatives_gpu[i], c2))   //  if both characters present
 #else
-            if (is_contain(semi_conservatives_arr[i], c1) && is_contain(semi_conservatives_arr[i], c2))   //  if both characters present
+            if (is_contain(semi_conservatives_cpu[i], c1) && is_contain(semi_conservatives_cpu[i], c2))   //  if both characters present
 #endif
                 return 1;
     return 0;
@@ -522,5 +516,5 @@ __global__ void fill_hashtable_gpu()
 
     char c1 = FIRST_CHAR + row;
     char c2 = FIRST_CHAR + col;
-    char_hash_cuda[row][col] = evaluate_chars(c1, c2);
+    hashtable_gpu[row][col] = evaluate_chars(c1, c2);
 }

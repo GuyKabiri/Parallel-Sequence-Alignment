@@ -11,14 +11,14 @@
 #include "program_data.h"
 #include "mutant.h"
 
-__constant__  char conservatives_arr_cuda[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
-__constant__  char semi_conservatives_arr_cuda[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
-__device__ char char_hash_cuda[NUM_CHARS][NUM_CHARS];
+__constant__  char conservatives_gpu[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
+__constant__  char semi_conservatives_gpu[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
+__device__ char hashtable_gpu[NUM_CHARS][NUM_CHARS];
 
 
 double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_offset, int last_offset);
 
-__global__ void get_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset);
+__global__ void find_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset);
 __device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mutant* mt);
 __host__ __device__ char find_char(char c1, char c2, double* w, int is_max);
 __host__ __device__ char find_max_char(char c1, char c2, char sign, double* w);
