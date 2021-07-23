@@ -45,6 +45,12 @@ int main(int argc, char* argv[])
             cuda_percentage = 0;
         }
     }
+    else if (argc == 1)
+    {
+        if (pid == ROOT)
+                printf("Cuda percentage did not set, set cude_percentage=0\n");
+            cuda_percentage = 0;
+    }
 
     if (num_processes == 1)
         omp_set_num_threads(1);

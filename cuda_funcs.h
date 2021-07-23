@@ -20,19 +20,20 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
 
 __global__ void get_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset);
 __device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mutant* mt);
-__host__ __device__ char find_char(char c1, char c2, double* w, int is_max, char hash[][NUM_CHARS]);
-__host__ __device__ char find_max_char(char c1, char c2, char sign, double* w, char hash[][NUM_CHARS]);
-__host__ __device__ char find_min_char(char c1, char c2, char sign, double* w, char hash[][NUM_CHARS]);
-__host__ __device__ char get_char_by_sign_with_restrictions(char by, char sign, char rest, char hash[][NUM_CHARS]);
+__host__ __device__ char find_char(char c1, char c2, double* w, int is_max);
+__host__ __device__ char find_max_char(char c1, char c2, char sign, double* w);
+__host__ __device__ char find_min_char(char c1, char c2, char sign, double* w);
+__host__ __device__ char get_char_by_sign_with_restrictions(char by, char sign, char rest);
 
-__host__ __device__ char get_hash_sign(char c1, char c2, char hash[][NUM_CHARS]);
+__host__ __device__ char get_hash_sign(char c1, char c2);
 __host__ __device__ double get_weight(char sign, double* w);
 
+__host__ __device__ int is_contain(char* str, char c);
+__host__ __device__ int is_conservative(char c1, char c2);
+__host__ __device__ int is_semi_conservative(char c1, char c2);
+__host__ __device__ char evaluate_chars(char a, char b);
+
 __device__ int strlen_gpu(char* str);
-__device__ int is_contain_gpu(char* str, char c);
-__device__ int is_conservative_gpu(char c1, char c2);
-__device__ int is_semi_conservative_gpu(char c1, char c2);
-__device__ char evaluate_chars_gpu(char a, char b);
 __global__ void fill_hashtable_gpu();
 
 
