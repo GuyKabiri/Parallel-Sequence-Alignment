@@ -13,7 +13,7 @@ __global__ void sumCommMultiBlock(double* scores, Mutant* mutants, int array_siz
     double s = is_max ? INT_MIN : INT_MAX;
     Mutant m;
     for (int i = gthIdx; i < array_size; i += gridSize)
-    {
+    {   
         if ((is_max && scores[i] > s) || (!is_max && scores[i] < s))
         {
             s = scores[i];
@@ -25,12 +25,16 @@ __global__ void sumCommMultiBlock(double* scores, Mutant* mutants, int array_siz
     shScore[thIdx] = s;
     shMutant[thIdx] = m;
     __syncthreads();
-    for (int size = BLOCK_SIZE/2; size>0; size/=2) { //uniform
-        if (thIdx<size)
+    for (int size = BLOCK_SIZE/2; size>0; size/=2)
+    { //uniform
+        if (thIdx<size && thIdx + size < array_size)
         {
-            if ((is_max && shScore[thIdx + size] > shScore[thIdx]) ||
-                (!is_max && shScore[thIdx + size] < shScore[thIdx]))
+            if ((is_max && shScore[thIdx + size] >= shScore[thIdx]) ||
+                (!is_max && shScore[thIdx + size] <= shScore[thIdx]))   //  include '==' to make sure the smaller offset is saved
             {
+                if (shScore[thIdx + size] == shScore[thIdx] && !(shMutant[thIdx + size].offset < shMutant[thIdx].offset))   //  if scores equal and the smaller offset is save -> continue
+                    continue;
+                //  otherwise, the scores are not equal, or they are equal, but the greater one is saved -> save the new score
                 shScore[thIdx] = shScore[thIdx + size];
                 shMutant[thIdx] = shMutant[thIdx + size];
             }
@@ -232,11 +236,11 @@ __device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mut
         idx2 = i;                               //  index of seq2
         c1 = data->seq1[idx1];                  //  current char in seq1
         c2 = data->seq2[idx2];                  //  current char in seq2
-        pair_score = get_weight_gpu(get_hash_sign_gpu(c1, c2), data->weights);    //  get weight before substitution
+        pair_score = get_weight(get_hash_sign(c1, c2, char_hash_cuda), data->weights);    //  get weight before substitution
         total_score += pair_score;
 
-        subtitue = find_char_gpu(c1, c2, data->weights, data->is_max);
-        mutant_diff = get_weight_gpu(get_hash_sign_gpu(c1, subtitue), data->weights) - pair_score;    //  difference between original and mutation weights
+        subtitue = find_char(c1, c2, data->weights, data->is_max, char_hash_cuda);
+        mutant_diff = get_weight(get_hash_sign(c1, subtitue, char_hash_cuda), data->weights) - pair_score;    //  difference between original and mutation weights
         mutant_diff = abs(mutant_diff);
 
 
@@ -253,16 +257,16 @@ __device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mut
     return total_score - best_mutant_diff;     //  best mutant is returned in struct mt
 }
 
-__device__ char find_char_gpu(char c1, char c2, double* w, int is_max)
+__host__ __device__ char find_char(char c1, char c2, double* w, int is_max, char hash[][NUM_CHARS])
 {
-    char sign = get_hash_sign_gpu(c1, c2);
+    char sign = get_hash_sign(c1, c2, hash);
 
     return  is_max ?
-            find_max_char_gpu(c1, c2, sign, w)   :
-            find_min_char_gpu(c1, c2, sign, w);
+            find_max_char(c1, c2, sign, w, hash)   :
+            find_min_char(c1, c2, sign, w, hash);
 }
 
-__device__ char find_max_char_gpu(char c1, char c2, char sign, double* w)
+__host__  __device__ char find_max_char(char c1, char c2, char sign, double* w, char hash[][NUM_CHARS])
 {
     char ch;
     switch (sign)
@@ -285,14 +289,14 @@ __device__ char find_max_char_gpu(char c1, char c2, char sign, double* w)
 
         if (space_diff > dot_diff)                 //  if SPACE subtitution is better than DOT
         {
-            ch = get_char_by_sign_with_restrictions_gpu(c1, SPACE, c2);
+            ch = get_char_by_sign_with_restrictions(c1, SPACE, c2, hash);
             if (ch != NOT_FOUND_CHAR)       //  if found SPACE subtitution
                 return ch;
             
             //  if could not find SPACE subtitution, and DOT is better than no subtitution
             if (dot_diff > 0)
             {
-                ch = get_char_by_sign_with_restrictions_gpu(c1, DOT, c2);
+                ch = get_char_by_sign_with_restrictions(c1, DOT, c2, hash);
                 if (ch != NOT_FOUND_CHAR)       //  if found DOT subtitution
                     return ch;
             }
@@ -302,14 +306,14 @@ __device__ char find_max_char_gpu(char c1, char c2, char sign, double* w)
         }
 
         //  otherwise, it will try to find DOT subtitution
-        ch = get_char_by_sign_with_restrictions_gpu(c1, DOT, c2);
+        ch = get_char_by_sign_with_restrictions(c1, DOT, c2, hash);
         if (ch != NOT_FOUND_CHAR)       //  if found DOT subtitution
             return ch;
 
         //  if could not find DOT subtitution, and SPACE is better than no subtitution
         if (space_diff > 0)
         {
-            ch = get_char_by_sign_with_restrictions_gpu(c1, SPACE, c2);
+            ch = get_char_by_sign_with_restrictions(c1, SPACE, c2, hash);
             if (ch != NOT_FOUND_CHAR)       //  if found SPACE subtitution
                 return ch;
         }
@@ -323,11 +327,11 @@ __device__ char find_max_char_gpu(char c1, char c2, char sign, double* w)
     return c2;
 }
 
-__device__ char find_min_char_gpu(char c1, char c2, char sign, double* w)
+__host__ __device__ char find_min_char(char c1, char c2, char sign, double* w, char hash[][NUM_CHARS])
 {   
-    char colon_sub = get_char_by_sign_with_restrictions_gpu(c1, COLON, c2);
-    char dot_sub = get_char_by_sign_with_restrictions_gpu(c1, DOT, c2);
-    char space_sub = get_char_by_sign_with_restrictions_gpu(c1, SPACE, c2);
+    char colon_sub = get_char_by_sign_with_restrictions(c1, COLON, c2, hash);
+    char dot_sub = get_char_by_sign_with_restrictions(c1, DOT, c2, hash);
+    char space_sub = get_char_by_sign_with_restrictions(c1, SPACE, c2, hash);
 
     double colon_diff, dot_diff, space_diff;
 
@@ -437,28 +441,28 @@ __device__ char find_min_char_gpu(char c1, char c2, char sign, double* w)
     return c2;      //  sign was not any of the legal signs
 }
 
-__device__ char get_char_by_sign_with_restrictions_gpu(char by, char sign, char rest)
+__host__ __device__ char get_char_by_sign_with_restrictions(char by, char sign, char rest, char hash[][NUM_CHARS])
 {
     char last_char = FIRST_CHAR + NUM_CHARS;
     for (char ch = FIRST_CHAR; ch < last_char; ch++)   //  iterate over alphabet (A-Z)
     {
-        if (get_hash_sign_gpu(by, ch) == sign && get_hash_sign_gpu(rest, ch) != COLON)  //  if found character which is not in the same conservative group with the previous one
+        if (get_hash_sign(by, ch, hash) == sign && get_hash_sign(rest, ch, hash) != COLON)  //  if found character which is not in the same conservative group with the previous one
             return ch;
     }
     return NOT_FOUND_CHAR;
 }
 
-__device__ char get_hash_sign_gpu(char c1, char c2)
+__host__ __device__ char get_hash_sign(char c1, char c2, char hash[][NUM_CHARS])
 {
     if (c1 > FIRST_CHAR + NUM_CHARS || c2 > FIRST_CHAR + NUM_CHARS)   return DASH;
     if (c1 == DASH && c2 == DASH)   return STAR;
     if (c1 == DASH || c2 == DASH)   return SPACE;
     if (c1 >= c2)       //  only the bottom triangle of the hash table is full -> (hash[x][y] = hash[y][x])
-        return char_hash_cuda[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
-    return char_hash_cuda[c2 - FIRST_CHAR][c1 - FIRST_CHAR];
+        return hash[c1 - FIRST_CHAR][c2 - FIRST_CHAR];
+    return hash[c2 - FIRST_CHAR][c1 - FIRST_CHAR];
 }
 
-__device__ double get_weight_gpu(char sign, double* w)
+__host__ __device__ double get_weight(char sign, double* w)
 {
     switch (sign)
     {
