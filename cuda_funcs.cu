@@ -281,15 +281,15 @@ __host__  __device__ char find_max_char(char c1, char c2, char sign, double* w)
         if (ch != NOT_FOUND_CHAR)       //  if found DOT substitution
             return ch;
 
-        //  if could not find DOT subtitution, and SPACE is better than no subtitution
+        //  if could not find DOT substitution, and SPACE is better than no substitution
         if (space_diff > 0)
         {
             ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-            if (ch != NOT_FOUND_CHAR)       //  if found SPACE subtitution
+            if (ch != NOT_FOUND_CHAR)       //  if found SPACE substitution
                 return ch;
         }
 
-        //  otherwise, no subtitution found
+        //  otherwise, no substitution found
         return c2;
     }
     return c2;
@@ -309,7 +309,7 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
         dot_diff = - w[STAR_W] - w[DOT_W];
         space_diff = - w[STAR_W] - w[SPACE_W];
 
-        if (!(dot_diff < 0 || space_diff < 0))    //  if any subtitution will not decrease the score
+        if (!(dot_diff < 0 || space_diff < 0))    //  if any substitution will not decrease the score
             return c2;                                              //  than return the same letter and score
 
         if (dot_diff < space_diff)
@@ -318,29 +318,29 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
                 return dot_sub;
         }
 
-        //  could not find DOT subtitution
+        //  could not find DOT substitution
         if (space_diff < 0)
         {
             if (space_sub != NOT_FOUND_CHAR)
                 return space_sub;
 
-            //  could not find SPACE subtitution, but DOT might be better than nothing
+            //  could not find SPACE substitution, but DOT might be better than nothing
             if (dot_diff < 0 && dot_sub != NOT_FOUND_CHAR)
                 return dot_sub;
         }
 
-        return c2;  //  could not find any subtitution
+        return c2;  //  could not find any substitution
     
     case COLON:
         dot_diff = w[COLON_W] - w[DOT_W];
         space_diff = w[COLON_W] - w[SPACE_W];
 
-        if (!(dot_diff < 0 || space_diff < 0))      //  if any subtitution will not decrease the score
+        if (!(dot_diff < 0 || space_diff < 0))      //  if any substitution will not decrease the score
             return c2;                              //  than return the same letter and score
 
-        if (dot_diff < space_diff)                  //  if DOT subtitution is better than SPACE
+        if (dot_diff < space_diff)                  //  if DOT substitution is better than SPACE
         {
-            if (dot_sub != NOT_FOUND_CHAR)          //  if found DOT subtitution
+            if (dot_sub != NOT_FOUND_CHAR)          //  if found DOT substitution
                 return dot_sub;
         }
 
@@ -349,21 +349,21 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
             if (space_sub != NOT_FOUND_CHAR)
                 return space_sub;
 
-            //  could not find SPACE subtitution, but DOT might be better than nothing
+            //  could not find SPACE substitution, but DOT might be better than nothing
             if (dot_diff < 0 && dot_sub != NOT_FOUND_CHAR)
                 return dot_sub;
         }
         
-        return c2;  // could not find any subtitution
+        return c2;  // could not find any substitution
 
     case DOT:
         colon_diff = w[DOT_W] - w[COLON_W];
         space_diff = w[DOT_W] - w[SPACE_W];
 
-        if (!(colon_diff < 0 && space_diff < 0))    //  if any subtitution will not decrease the score
+        if (!(colon_diff < 0 && space_diff < 0))    //  if any substitution will not decrease the score
             return c2;                              //  than return the same letter and score
 
-        if (colon_diff < space_diff)                //  if COLON subtitution is better than SPACE   
+        if (colon_diff < space_diff)                //  if COLON substitution is better than SPACE   
         {
             if (colon_sub != NOT_FOUND_CHAR)
                 return colon_sub;
@@ -374,37 +374,37 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
             if (space_sub != NOT_FOUND_CHAR)
                 return space_sub;
             
-            //  could not find SPACE subtitution, but COLON might still be better than nothing
+            //  could not find SPACE substitution, but COLON might still be better than nothing
             if (colon_diff < 0 && colon_sub != NOT_FOUND_CHAR)
                 return colon_sub;
         }
 
-        return c2;  // could not find any subtitution
+        return c2;  // could not find any substitution
 
     case SPACE:
         colon_diff = w[SPACE_W] - w[COLON_W];
         dot_diff = w[SPACE_W] - w[DOT_W];
 
-        if (!(colon_diff < 0 && dot_diff < 0))      //  if any subtitution will not decrease the score
+        if (!(colon_diff < 0 && dot_diff < 0))      //  if any substitution will not decrease the score
             return c2;                              //  than return the same letter and score
 
-        if (colon_diff < dot_diff)                  //  if COLON subtitution is better than DOT
+        if (colon_diff < dot_diff)                  //  if COLON substitution is better than DOT
         {
-            if (colon_sub != NOT_FOUND_CHAR)        //  if found COLON subtitution
+            if (colon_sub != NOT_FOUND_CHAR)        //  if found COLON substitution
                 return colon_sub;
         }
 
         if (dot_diff < 0)
         {
-            if (dot_sub != NOT_FOUND_CHAR)          //  if found DOT subtitution
+            if (dot_sub != NOT_FOUND_CHAR)          //  if found DOT substitution
                 return dot_sub;
 
-            //  could not find DOT subtitution, but COLON might still be better than nothing
+            //  could not find DOT substitution, but COLON might still be better than nothing
             if (colon_diff < 0 && colon_sub != NOT_FOUND_CHAR)
                 return colon_sub;
         }
 
-        return c2;  // could not find any subtitution
+        return c2;  // could not find any substitution
     }
     return c2;      //  sign was not any of the legal signs
 }
