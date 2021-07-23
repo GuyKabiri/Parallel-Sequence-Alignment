@@ -3,6 +3,48 @@
 #include "cuda_funcs.h"
 #include "def.h"
 
+#define BLOCK_SIZE  256
+
+__global__ void sumCommMultiBlock(double* scores, Mutant* mutants, int array_size, int is_max)
+{
+    int thIdx = threadIdx.x;
+    int gthIdx = thIdx + blockIdx.x*BLOCK_SIZE;
+    const int gridSize = BLOCK_SIZE*gridDim.x;
+    double s = is_max ? INT_MIN : INT_MAX;
+    Mutant m;
+    for (int i = gthIdx; i < array_size; i += gridSize)
+    {
+        if ((is_max && scores[i] > s) || (!is_max && scores[i] < s))
+        {
+            s = scores[i];
+            m = mutants[i];
+        }
+    }
+    __shared__ double shScore[BLOCK_SIZE];
+    __shared__ Mutant shMutant[BLOCK_SIZE];
+    shScore[thIdx] = s;
+    shMutant[thIdx] = m;
+    __syncthreads();
+    for (int size = BLOCK_SIZE/2; size>0; size/=2) { //uniform
+        if (thIdx<size)
+        {
+            if ((is_max && shScore[thIdx + size] > shScore[thIdx]) ||
+                (!is_max && shScore[thIdx + size] < shScore[thIdx]))
+            {
+                shScore[thIdx] = shScore[thIdx + size];
+                shMutant[thIdx] = shMutant[thIdx + size];
+            }
+
+        }
+        __syncthreads();
+    }
+    if (thIdx == 0)
+    {
+        scores[blockIdx.x] = shScore[0];
+        mutants[blockIdx.x] = shMutant[0];
+    }
+}
+
 double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_offset, int last_offset)
 {
     // Error code to check return values for CUDA calls
@@ -49,7 +91,7 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
     fill_hashtable_gpu<<<numBlocksHash, threadsPerBlockHash>>>();
 
     // Launch the Kernel
-    int threadsPerBlock = 256;
+    int threadsPerBlock = BLOCK_SIZE;
     int blocksPerGrid = (offsets + threadsPerBlock - 1) / threadsPerBlock;//offsets;
     printf("blocks=%d, threads=%d\n", blocksPerGrid, threadsPerBlock);
     get_best_mutant_gpu<<<blocksPerGrid, threadsPerBlock, 0>>>(gpu_data, gpu_mutant, scores, first_offset, last_offset);
@@ -59,6 +101,12 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
         fprintf(stderr, "Failed to launch vectorAdd kernel -  %s\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
+
+
+    sumCommMultiBlock<<<blocksPerGrid, threadsPerBlock>>>(scores, gpu_mutant, last_offset - first_offset, data->is_max);
+    sumCommMultiBlock<<<1, threadsPerBlock>>>(scores, gpu_mutant, blocksPerGrid, data->is_max);
+    cudaDeviceSynchronize();
+
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // gpu_mutant[0] = gpu_mutant[10];
@@ -109,6 +157,7 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
     return returned_score;
 }
 
+
 __global__ void get_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;        //  calculate thread index in the arrays
@@ -135,12 +184,38 @@ __global__ void get_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* 
     scores[idx] = find_best_mutant_offset_gpu(data, first_offset + idx, &mutants[idx]);
     // printf("off=%2d charoff=%2d, %f, %f\n", mutants[idx].offset, mutants[idx].char_offset, scores[idx]);
 
+    __syncthreads();
+
+    // //  TODO: validate reduction works with odd number of offsets
+    // // now reduction between all offsets
+    // if (offsets % 2 != 0 && offsets > 2)   //  there are odd amount of offsets, save max between last offset, and one before last offset in one before last
+    // {
+    //     if ((data->is_max && scores[offsets - 1] > scores[offsets - 2]) ||
+    //         (!data->is_max && scores[offsets - 1] < scores[offsets - 2]))
+    //     {
+    //         scores[offsets - 2] = scores[offsets - 1];
+    //         mutants[offsets - 2] = mutants[offsets - 1];
+    //     }
+    // }
+
     // __syncthreads();
+    // printf("offset=%d, score=%g\n", idx, scores[idx]);
 
-
-
-
-    // now reduction between all offsets
+    // for (int size = blockDim.x / 2; size > 0; size /= 2)
+    // {   
+    //     if (idx < size && idx + size < offsets / 2)
+    //     {
+    //         printf("off=%d, score=%g | off=%d, score=%g | size=%d\n", idx, scores[idx], idx + size, scores[idx + size], size);
+    //         if ((data->is_max && scores[idx + size] > scores[idx]) ||
+    //             (!data->is_max && scores[idx + size] < scores[idx]))
+    //         {
+    //             scores[idx] = scores[idx + size];
+    //             mutants[idx] = mutants[idx + size];
+    //         }
+    //     }
+    //     __syncthreads();
+    //     if (size == 1)  break;
+    // }
 }
 
 __device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mutant* mt)

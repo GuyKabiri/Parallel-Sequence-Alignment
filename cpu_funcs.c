@@ -69,8 +69,8 @@ void cpu_run_program(int pid, int num_processes)
 
     printf("pid %2d, total=%d, cuda start=%d, cuda end=%d, cpu start=%d, cpu end=%d\n", pid, total_tasks, gpu_first_offset, gpu_last_offset, cpu_first_offset, cpu_last_offset);
 
-    double gpu_best_score = 0;
-    double cpu_best_score = 0;
+    double gpu_best_score = data.is_max ? INT_MIN : INT_MAX;
+    double cpu_best_score = data.is_max ? INT_MIN : INT_MAX;
     Mutant gpu_mutant;
     Mutant my_mutant;
 
@@ -84,14 +84,15 @@ void cpu_run_program(int pid, int num_processes)
         gpu_best_score = gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
     }
 
-    printf("cpu best score=%f\ngpu best score=%f\n", cpu_best_score, gpu_best_score);
+    printf("cpu tasks=%3d, cpu best score=%lf\ngpu tasks=%3d, gpu best score=%lf\n", cpu_tasks, cpu_best_score, gpu_tasks, gpu_best_score);
 
-    Mutant final_best_mutant = my_mutant;
-    double final_best_score = cpu_best_score;
-    if ((data.is_max && gpu_best_score > cpu_best_score) || (!data.is_max && gpu_best_score < cpu_best_score))
+    Mutant final_best_mutant = gpu_mutant;
+    double final_best_score = gpu_best_score;
+    if ((data.is_max && cpu_best_score > gpu_best_score) || 
+        (!data.is_max && cpu_best_score < gpu_best_score))
     {
-        final_best_mutant = gpu_mutant;
-        final_best_score = gpu_best_score;
+        final_best_mutant = my_mutant;
+        final_best_score = cpu_best_score;
     }
 
     double my_best[2] = { 0 };
@@ -141,7 +142,7 @@ void cpu_run_program(int pid, int num_processes)
     		MPI_Abort(MPI_COMM_WORLD, 2);
 			exit(1);
     	}
-    	if (!write_results_to_file(out_file, data.seq2, final_best_mutant.offset, final_best_score))
+    	if (!write_results_to_file(out_file, mut, final_best_mutant.offset, final_best_score))
     	{
     		printf("Error write to the output file %s\n", OUTPUT_FILE);
 			MPI_Abort(MPI_COMM_WORLD, 2);
