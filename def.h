@@ -1,16 +1,16 @@
 #ifndef __DEF_H__
 #define __DEF_H__
 
-#define STAR    '*'     //  w1
-#define COLON   ':'     //  w2
-#define DOT     '.'     //  w3
-#define SPACE   ' '     //  w4
-#define DASH    '-'
+#define ASTERISK    '*'     //  w1
+#define COLON       ':'     //  w2
+#define DOT         '.'     //  w3
+#define SPACE       ' '     //  w4
+#define DASH        '-'
 
-#define STAR_W  0
-#define COLON_W 1
-#define DOT_W   2
-#define SPACE_W 3
+#define ASTERISK_W  0
+#define COLON_W     1
+#define DOT_W       2
+#define SPACE_W     3
 
 #define ROOT 0
 

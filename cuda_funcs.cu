@@ -242,11 +242,11 @@ __host__  __device__ char find_max_char(char c1, char c2, char sign, double* w)
     char ch;
     switch (sign)
     {
-    case STAR:
+    case ASTERISK:
         return c2;
 
-    case DOT:                   //  if there is DOT between two characters, a START substitution is possible
-    case SPACE:                 //  if there is SPACE between two characters, a START substitution is possible
+    case DOT:                   //  if there is DOT between two characters, an ASTERISK substitution is possible
+    case SPACE:                 //  if there is SPACE between two characters, an ASTERISK substitution is possible
         return c1;
 
     case COLON:
@@ -305,9 +305,9 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
 
     switch (sign)
     {
-    case STAR:
-        dot_diff = - w[STAR_W] - w[DOT_W];
-        space_diff = - w[STAR_W] - w[SPACE_W];
+    case ASTERISK:
+        dot_diff = - w[ASTERISK_W] - w[DOT_W];
+        space_diff = - w[ASTERISK_W] - w[SPACE_W];
 
         if (!(dot_diff < 0 || space_diff < 0))    //  if any substitution will not decrease the score
             return c2;                                              //  than return the same letter and score
@@ -423,7 +423,7 @@ __host__ __device__ char get_char_by_sign_with_restrictions(char by, char sign, 
 __host__ __device__ char get_hash_sign(char c1, char c2)
 {
     if (c1 > FIRST_CHAR + NUM_CHARS || c2 > FIRST_CHAR + NUM_CHARS)   return DASH;
-    if (c1 == DASH && c2 == DASH)   return STAR;
+    if (c1 == DASH && c2 == DASH)   return ASTERISK;
     if (c1 == DASH || c2 == DASH)   return SPACE;
 
     if (c1 >= c2)       //  only the bottom triangle of the hash table is full -> (hash[x][y] = hash[y][x])
@@ -440,7 +440,7 @@ __host__ __device__ double get_weight(char sign, double* w)
 {
     switch (sign)
     {
-    case STAR:  return w[STAR_W];
+    case ASTERISK:  return w[ASTERISK_W];
     case COLON: return -w[COLON_W];
     case DOT:   return -w[DOT_W];
     case SPACE: return -w[SPACE_W];
@@ -490,7 +490,7 @@ __host__ __device__ int is_semi_conservative(char c1, char c2)
 
 __host__ __device__ char evaluate_chars(char a, char b)
 {
-    if      (a == b)                        return STAR;
+    if      (a == b)                        return ASTERISK;
     else if (is_conservative(a, b))         return COLON;
     else if (is_semi_conservative(a, b))    return DOT;
 
