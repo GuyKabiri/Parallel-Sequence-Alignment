@@ -117,7 +117,7 @@ For a given Sequence `S` we define a Mutant Sequence $ MS(n) $ which is received
     *   `N` may be substituted by `W` because there is now conservative group that contains both `N` and `W`.
 *   It is not mandatory to substitute all instances of some characters by same substitution character, for example the sequence `PSHLSPSQ` has Mutant Sequence `PFHLSPLQ`.  
 
-## Project Definition:
+## Project Definition
 In the given assignment, two sequences `Seq1`, `Seq2`, and a set of weights is provided. A mutation of the sequences `Seq2` and it's offset is need to be found, which produce the `MAX` or `MIN` score (will be given as an input as well).  
 
 
@@ -161,7 +161,7 @@ Z |                                                  *
 - |                                                    * 
 ```
 
-
+Now, a parallel solution is need to be implemented. As this project will run on two machines at the same time, each machine should handle half of the tasks. One machine should be able to download the input data and write the output data to the file, as defined in the project. `MPI` should be used to send the data between machines before initiating the search algorithm. `MPI` provides a simple way to determine the number of processes, so after passing the data between processes, they can calculate how many tasks in total will be handled. A process has its own id, so it can determine which specific tasks it will handle (with consideration for unequal amounts of tasks).
 
 
 
