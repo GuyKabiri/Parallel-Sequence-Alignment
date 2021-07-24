@@ -290,30 +290,30 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
     return c2;      //  sign was not any of the legal signs
 }
 
-__host__ __device__ char find_optimal_char(double diff1, char sub1, double diff2, char sub2, char def_char)
+__host__ __device__ char find_optimal_char(int is_max, double diff1, char sub1, double diff2, char sub2, char def_char)
 {
-    diff1 = abs(diff1);     //  in both maximum and minimum cases, a higher change in score will be desired,
-    diff2 = abs(diff2);     //  so an absolute could be used to generalize the function
-
-    if (!(diff1 > 0  || diff2 > 0))     //  if any substitution will not affect the score
-        return def_char;                //  return the default character
+    if ((is_max && !(diff1 > 0  || diff2 > 0))  ||  //  maximum problem and neither substitution is greater than 0
+        (!is_max && !(diff1 < 0  || diff2 < 0)))    //  or, minimum problem and neither substitution is smaller than 0
+        return def_char;                            //  return the default character
 
 
-    //  if first different is greater and such substitue exists
-    if (diff1 > diff2 && sub1 != NOT_FOUND_CHAR)
-        return sub1;
+    //  if first different is better, and such substitue exists
+    if ((is_max && diff1 > diff2) || (!is_max && diff1 < diff2))
+        if (sub1 != NOT_FOUND_CHAR)
+            return sub1;
 
-    //  diff1 is not greater than diff2, or first substitue is not possible
-    //  therefore examination if diff2 is greater than 0 is necessary
-    if (diff2 > 0)
+    //  diff1 is not better than diff2, or first substitue is not possible
+    //  therefore examination if diff2 is better than 0 is necessary
+    if ((is_max && diff2 > 0) || (!is_max && diff2 < 0))
     {
         //  if second substitue is possible, return it
         if (sub2 != NOT_FOUND_CHAR)
             return sub2;
 
         //  second subtitue is not possible, but the first one might be better than nothing
-        if (diff1 < 0 && sub1 != NOT_FOUND_CHAR)
-            return sub1;
+        if ((is_max && diff1 > 0) || (!is_max && diff1 < 0)
+            if (sub1 != NOT_FOUND_CHAR)
+                return sub1;
     }
 
     return def_char;  //  could not find any substitution
