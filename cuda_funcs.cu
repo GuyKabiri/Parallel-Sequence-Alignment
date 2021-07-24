@@ -1,4 +1,3 @@
-#include <cuda_runtime.h>
 #include <helper_cuda.h>
 #include "cuda_funcs.h"
 #include "def.h"
@@ -112,13 +111,6 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
     sumCommMultiBlock<<<blocksPerGrid, threadsPerBlock>>>(scores, gpu_mutant, last_offset - first_offset, data->is_max);
     sumCommMultiBlock<<<1, threadsPerBlock>>>(scores, gpu_mutant, blocksPerGrid, data->is_max);
     cudaDeviceSynchronize();
-
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // gpu_mutant[0] = gpu_mutant[10];
-    // scores[0] = scores[10];
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     //  the best mutant is in index 0 in mutants array
     err = cudaMemcpy(returned_mutant, &gpu_mutant[0], sizeof(Mutant), cudaMemcpyDeviceToHost);
@@ -239,7 +231,6 @@ __host__ __device__ char find_char(char c1, char c2, double* w, int is_max)
 
 __host__  __device__ char find_max_char(char c1, char c2, char sign, double* w)
 {
-    char ch;
     switch (sign)
     {
     case ASTERISK:
@@ -253,44 +244,10 @@ __host__  __device__ char find_max_char(char c1, char c2, char sign, double* w)
         double dot_diff = w[COLON_W] - w[DOT_W];
         double space_diff = w[COLON_W] - w[SPACE_W];
 
-        if (!(dot_diff > 0 || space_diff > 0))      //  if both not greater than 0 (negative change or no change at all)
-        {                                           //  then, no score change and return the same character
-            return c2;
-        }
+        char dot_sub = get_char_by_sign_with_restrictions(c1, DOT, c2);
+        char space_sub = get_char_by_sign_with_restrictions(c1, SPACE, c2);
 
-        if (space_diff > dot_diff)                 //  if SPACE substitution is better than DOT
-        {
-            ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-            if (ch != NOT_FOUND_CHAR)       //  if found SPACE substitution
-                return ch;
-            
-            //  if could not find SPACE substitution, and DOT is better than no substitution
-            if (dot_diff > 0)
-            {
-                ch = get_char_by_sign_with_restrictions(c1, DOT, c2);
-                if (ch != NOT_FOUND_CHAR)       //  if found DOT substitution
-                    return ch;
-            }
-
-            //  otherwise, no substitution found
-            return c2;
-        }
-
-        //  otherwise, it will try to find DOT substitution
-        ch = get_char_by_sign_with_restrictions(c1, DOT, c2);
-        if (ch != NOT_FOUND_CHAR)       //  if found DOT substitution
-            return ch;
-
-        //  if could not find DOT substitution, and SPACE is better than no substitution
-        if (space_diff > 0)
-        {
-            ch = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-            if (ch != NOT_FOUND_CHAR)       //  if found SPACE substitution
-                return ch;
-        }
-
-        //  otherwise, no substitution found
-        return c2;
+        return find_optimal_char(dot_diff, dot_sub, space_diff, space_sub, c2);
     }
     return c2;
 }
@@ -309,104 +266,57 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
         dot_diff = - w[ASTERISK_W] - w[DOT_W];
         space_diff = - w[ASTERISK_W] - w[SPACE_W];
 
-        if (!(dot_diff < 0 || space_diff < 0))    //  if any substitution will not decrease the score
-            return c2;                                              //  than return the same letter and score
-
-        if (dot_diff < space_diff)
-        {
-            if (dot_sub != NOT_FOUND_CHAR)
-                return dot_sub;
-        }
-
-        //  could not find DOT substitution
-        if (space_diff < 0)
-        {
-            if (space_sub != NOT_FOUND_CHAR)
-                return space_sub;
-
-            //  could not find SPACE substitution, but DOT might be better than nothing
-            if (dot_diff < 0 && dot_sub != NOT_FOUND_CHAR)
-                return dot_sub;
-        }
-
-        return c2;  //  could not find any substitution
+        return find_optimal_char(dot_diff, dot_sub, space_diff, space_sub, c2);
     
     case COLON:
         dot_diff = w[COLON_W] - w[DOT_W];
         space_diff = w[COLON_W] - w[SPACE_W];
 
-        if (!(dot_diff < 0 || space_diff < 0))      //  if any substitution will not decrease the score
-            return c2;                              //  than return the same letter and score
-
-        if (dot_diff < space_diff)                  //  if DOT substitution is better than SPACE
-        {
-            if (dot_sub != NOT_FOUND_CHAR)          //  if found DOT substitution
-                return dot_sub;
-        }
-
-        if (space_diff < 0)
-        {
-            if (space_sub != NOT_FOUND_CHAR)
-                return space_sub;
-
-            //  could not find SPACE substitution, but DOT might be better than nothing
-            if (dot_diff < 0 && dot_sub != NOT_FOUND_CHAR)
-                return dot_sub;
-        }
-        
-        return c2;  // could not find any substitution
+        return find_optimal_char(dot_diff, dot_sub, space_diff, space_sub, c2);
 
     case DOT:
         colon_diff = w[DOT_W] - w[COLON_W];
         space_diff = w[DOT_W] - w[SPACE_W];
 
-        if (!(colon_diff < 0 && space_diff < 0))    //  if any substitution will not decrease the score
-            return c2;                              //  than return the same letter and score
-
-        if (colon_diff < space_diff)                //  if COLON substitution is better than SPACE   
-        {
-            if (colon_sub != NOT_FOUND_CHAR)
-                return colon_sub;
-        }
-
-        if (space_diff < 0)
-        {
-            if (space_sub != NOT_FOUND_CHAR)
-                return space_sub;
-            
-            //  could not find SPACE substitution, but COLON might still be better than nothing
-            if (colon_diff < 0 && colon_sub != NOT_FOUND_CHAR)
-                return colon_sub;
-        }
-
-        return c2;  // could not find any substitution
+        return find_optimal_char(colon_diff, colon_sub, space_diff, space_sub, c2);
 
     case SPACE:
         colon_diff = w[SPACE_W] - w[COLON_W];
         dot_diff = w[SPACE_W] - w[DOT_W];
 
-        if (!(colon_diff < 0 && dot_diff < 0))      //  if any substitution will not decrease the score
-            return c2;                              //  than return the same letter and score
-
-        if (colon_diff < dot_diff)                  //  if COLON substitution is better than DOT
-        {
-            if (colon_sub != NOT_FOUND_CHAR)        //  if found COLON substitution
-                return colon_sub;
-        }
-
-        if (dot_diff < 0)
-        {
-            if (dot_sub != NOT_FOUND_CHAR)          //  if found DOT substitution
-                return dot_sub;
-
-            //  could not find DOT substitution, but COLON might still be better than nothing
-            if (colon_diff < 0 && colon_sub != NOT_FOUND_CHAR)
-                return colon_sub;
-        }
-
-        return c2;  // could not find any substitution
+        return find_optimal_char(dot_diff, dot_sub, space_diff, space_sub, c2);
     }
+    
     return c2;      //  sign was not any of the legal signs
+}
+
+__host__ __device__ char find_optimal_char(double diff1, char sub1, double diff2, char sub2, char def_char)
+{
+    diff1 = abs(diff1);     //  in both maximum and minimum cases, a higher change in score will be desired,
+    diff2 = abs(diff2);     //  so an absolute could be used to generalize the function
+
+    if (!(diff1 > 0  || diff2 > 0))     //  if any substitution will not affect the score
+        return def_char;                //  return the default character
+
+
+    //  if first different is greater and such substitue exists
+    if (diff1 > diff2 && sub1 != NOT_FOUND_CHAR)
+        return sub1;
+
+    //  diff1 is not greater than diff2, or first substitue is not possible
+    //  therefore examination if diff2 is greater than 0 is necessary
+    if (diff2 > 0)
+    {
+        //  if second substitue is possible, return it
+        if (sub2 != NOT_FOUND_CHAR)
+            return sub2;
+
+        //  second subtitue is not possible, but the first one might be better than nothing
+        if (diff1 < 0 && sub1 != NOT_FOUND_CHAR)
+            return sub1;
+    }
+
+    return def_char;  //  could not find any substitution
 }
 
 __host__ __device__ char get_char_by_sign_with_restrictions(char by, char sign, char rest)

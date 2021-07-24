@@ -23,6 +23,7 @@ __device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mut
 __host__ __device__ char find_char(char c1, char c2, double* w, int is_max);
 __host__ __device__ char find_max_char(char c1, char c2, char sign, double* w);
 __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w);
+__host__ __device__ char find_optimal_char(double diff1, char sub1, double diff2, char sub2, char def_char);
 __host__ __device__ char get_char_by_sign_with_restrictions(char by, char sign, char rest);
 
 __host__ __device__ char get_hash_sign(char c1, char c2);

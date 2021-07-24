@@ -48,7 +48,6 @@ void cpu_run_program(int pid, int num_processes)
     }
 
     int total_tasks = strlen(data.seq1) - strlen(data.seq2) + 1;
-
     int per_proc_tasks = total_tasks / data.proc_count;
 
     int first_offset = per_proc_tasks * pid;  //  each process will handle the same amount of tasks, therefore, offset will be multiply by the process index

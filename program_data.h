@@ -4,11 +4,11 @@
 #include "def.h"
 
 typedef struct _data {
+    int proc_count;
+    int is_max;
     char seq1[SEQ1_MAX_LEN];
     char seq2[SEQ2_MAX_LEN];
     double weights[WEIGHTS_COUNT];
-    int is_max;
-    int proc_count;
 } ProgramData;
 
 #define NUM_OF_PARAMS 5
