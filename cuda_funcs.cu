@@ -238,6 +238,8 @@ __host__ __device__ char find_char(char c1, char c2, double* w, int is_max)
 
 __host__  __device__ char find_max_char(char c1, char c2, char sign, double* w)
 {
+    double dot_diff, space_diff;
+
     switch (sign)
     {
     case DOT:                   //  if there is DOT between two characters, an ASTERISK substitution is possible
@@ -245,16 +247,20 @@ __host__  __device__ char find_max_char(char c1, char c2, char sign, double* w)
         return c1;
 
     case ASTERISK:
+        dot_diff = - w[ASTERISK_W] - w[DOT_W];
+        space_diff = - w[ASTERISK_W] - w[SPACE_W];
+        break;
+
     case COLON:
-        double dot_diff = w[COLON_W] - w[DOT_W];
-        double space_diff = w[COLON_W] - w[SPACE_W];
-
-        char dot_sub = get_char_by_sign_with_restrictions(c1, DOT, c2);
-        char space_sub = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-
-        return find_optimal_char(TRUE, dot_diff, dot_sub, space_diff, space_sub);
+        dot_diff = w[COLON_W] - w[DOT_W];
+        space_diff = w[COLON_W] - w[SPACE_W];
+        break;
     }
-    return NOT_FOUND_CHAR;
+
+    char dot_sub = get_char_by_sign_with_restrictions(c1, DOT, c2);
+    char space_sub = get_char_by_sign_with_restrictions(c1, SPACE, c2);
+
+    return find_optimal_char(TRUE, dot_diff, dot_sub, space_diff, space_sub);
 }
 
 __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
