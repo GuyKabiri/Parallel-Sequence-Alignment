@@ -268,6 +268,7 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
     char colon_sub = get_char_by_sign_with_restrictions(c1, COLON, c2);
     char dot_sub = get_char_by_sign_with_restrictions(c1, DOT, c2);
     char space_sub = get_char_by_sign_with_restrictions(c1, SPACE, c2);
+    char ch;
 
     double colon_diff, dot_diff, space_diff;
 
@@ -291,14 +292,15 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
         colon_diff = w[DOT_W] - w[COLON_W];
         space_diff = w[DOT_W] - w[SPACE_W];
 
-        return find_optimal_char(FALSE, colon_diff, colon_sub, space_diff, space_sub);
-
+        ch = find_optimal_char(FALSE, colon_diff, colon_sub, space_diff, space_sub);
+        return ch == NOT_FOUND_CHAR ? ASTERISK : NOT_FOUND_CHAR;
 
     case SPACE:
         colon_diff = w[SPACE_W] - w[COLON_W];
         dot_diff = w[SPACE_W] - w[DOT_W];
 
-        return find_optimal_char(FALSE, colon_diff, colon_sub, dot_diff, dot_sub);
+        ch = find_optimal_char(FALSE, colon_diff, colon_sub, dot_diff, dot_sub);
+        return ch == NOT_FOUND_CHAR ? ASTERISK : NOT_FOUND_CHAR;
     }
     return NOT_FOUND_CHAR;      //  sign was not any of the legal signs
 }
