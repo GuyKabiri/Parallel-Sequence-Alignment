@@ -27,7 +27,7 @@ extern int cuda_percentage;
 extern MPI_Datatype program_data_type;
 extern MPI_Datatype mutant_type;
 
-void cpu_run_program(int pid, int num_processes)
+void initiate_program(int pid, int num_processes)
 {
     ProgramData data;
 
@@ -48,8 +48,6 @@ void cpu_run_program(int pid, int num_processes)
             MPI_Abort(MPI_COMM_WORLD, 2);
         }
         fclose(input_file);
-
-        data.proc_count = num_processes;
     }
 
     if (num_processes > 1)      //  broadcast with MPI only if there are more processes
@@ -58,12 +56,12 @@ void cpu_run_program(int pid, int num_processes)
     }
 
     int total_tasks = strlen(data.seq1) - strlen(data.seq2) + 1;
-    int per_proc_tasks = total_tasks / data.proc_count;
+    int per_proc_tasks = total_tasks / num_processes;
 
     int first_offset = per_proc_tasks * pid;  //  each process will handle the same amount of tasks, therefore, offset will be multiply by the process index
     int last_offset = per_proc_tasks + first_offset;
-    if (pid == data.proc_count - 1)    //  if the tasks do not divide by the number of processes, the last process will handle any additional tasks
-        last_offset += total_tasks % data.proc_count;
+    if (pid == num_processes - 1)    //  if the tasks do not divide by the number of processes, the last process will handle any additional tasks
+        last_offset += total_tasks % num_processes;
 
 
 
@@ -89,15 +87,22 @@ void cpu_run_program(int pid, int num_processes)
     Mutant gpu_mutant;
     Mutant my_mutant;
 
+// #pragma omp parallel
+{
+    // printf("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ %d\n", omp_get_num_threads());
+    // #pragma omp single
+    {
+        if (gpu_tasks > 0)
+        {
+            gpu_best_score = gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
+        }
+    }
+
     if (cpu_tasks > 0)
     {   
         cpu_best_score = find_best_mutant_cpu(pid, &data, &my_mutant, cpu_first_offset, cpu_last_offset);
     }
-
-    if (gpu_tasks > 0)
-    {
-        gpu_best_score = gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
-    }
+}
 
     printf("cpu tasks=%3d, cpu best score=%lf\ngpu tasks=%3d, gpu best score=%lf\n", cpu_tasks, cpu_best_score, gpu_tasks, gpu_best_score);
 
@@ -221,6 +226,7 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
 
 void fill_hash(double* weights, int pid)
 {
+    // printf("********************************************************************************************** %2d\n", omp_get_thread_num());
 #pragma omp parallel for
     for (int i = 0; i < NUM_CHARS; i++)
     {
@@ -229,6 +235,9 @@ void fill_hash(double* weights, int pid)
         {
             char c2 = FIRST_CHAR + j;
             hashtable_cpu[i][j] = evaluate_chars(c1, c2);
+            // printf("--------------------------------------------------------------------------------- %2d, %2d, id=%2d, %2d\n", i, j, omp_get_thread_num(), omp_get_num_threads());
+    // printf("********************************************************************************************** %2d\n", omp_get_thread_num());
+
         }
         hashtable_cpu[i][NUM_CHARS] = SPACE;    //  each char with '-' (hash[ch][-])
     }
@@ -312,7 +321,6 @@ ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)
     char func_type[FUNC_NAME_LEN];
     if (fscanf(file, "%s", func_type) != 1)   return NULL;
     data->is_max = strcmp(func_type, MAXIMUM_STR) == 0 ? MAXIMUM_FUNC : MINIMUM_FUNC;    //  saves '1' if it is a maximum, otherwise, saves '0'
-    data->proc_count = 0;
 
     return data;
 }

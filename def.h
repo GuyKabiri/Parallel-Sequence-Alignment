@@ -6,6 +6,7 @@
 #define DOT         '.'     //  w3
 #define SPACE       '_'     //  w4
 #define DASH        '-'
+#define NOT_FOUND_CHAR '\0'
 
 #define ASTERISK_W  0
 #define COLON_W     1
@@ -19,8 +20,6 @@
 
 #define TRUE 1
 #define FALSE 0
-
-#define NOT_FOUND_CHAR '\0'
 
 #define NUM_CHARS 26
 #define FIRST_CHAR 'A'
@@ -41,8 +40,6 @@
 #define MINIMUM_STR "minimum"
 #define MAXIMUM_FUNC 1
 #define MINIMUM_FUNC 0
-
-// enum eSign { eStar, eColon, ePoint, eSpace };
 
 typedef unsigned int uint;
 

@@ -4,7 +4,7 @@
 #include "program_data.h"
 #include "mutant.h"
 
-void cpu_run_program(int pid, int num_processes);
+void initiate_program(int pid, int num_processes);
 
 void fill_hash(double* weights, int pid);
 void print_hash();

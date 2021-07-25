@@ -184,3 +184,9 @@ After the file exists on the main machine, and both machines contain the executa
 mpiexec -np 2 -machinefile mf -map-by node ./{EXECUTABLE} {GPU} 
 ```
 where `{EXECUTABLE}` is the name of the executable file, and `{GPU}` is a number represents the percentage of tasks to run on the machines GPU.
+
+
+
+# Difficulties:
+*  MPI Datatypes
+*  Cuda blocks

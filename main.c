@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
         omp_set_num_threads(4);
 
     // time -= MPI_Wtime();    //  substract the mpi initiation time
-    cpu_run_program(pid, num_processes);
+    initiate_program(pid, num_processes);
     // time += MPI_Wtime();    //  get program time
     time = MPI_Wtime() - time;    //  get program time
 
