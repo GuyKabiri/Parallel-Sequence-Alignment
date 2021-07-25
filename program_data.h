@@ -6,11 +6,11 @@
 typedef struct _data {
     int proc_count;
     int is_max;
+    double weights[WEIGHTS_COUNT];
     char seq1[SEQ1_MAX_LEN];
     char seq2[SEQ2_MAX_LEN];
-    double weights[WEIGHTS_COUNT];
 } ProgramData;
 
-#define NUM_OF_PARAMS 5
+#define NUM_OF_PARAMS_DATA 5
 
 #endif //__PROGRAM_DATA_H__

@@ -4,7 +4,7 @@
 #define ASTERISK    '*'     //  w1
 #define COLON       ':'     //  w2
 #define DOT         '.'     //  w3
-#define SPACE       ' '     //  w4
+#define SPACE       '_'     //  w4
 #define DASH        '-'
 
 #define ASTERISK_W  0
@@ -44,7 +44,6 @@
 
 // enum eSign { eStar, eColon, ePoint, eSpace };
 
-static char conservatives_cpu[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
-static char semi_conservatives_cpu[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
+typedef unsigned int uint;
 
 #endif // __DEF_H__

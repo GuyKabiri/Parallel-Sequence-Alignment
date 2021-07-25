@@ -1,13 +1,14 @@
 CFLAGS = -Wall
 LIBS = -lm
-C_FILES = main.c cpu_funcs.c
+C_FILES = main.c cpu_funcs.c mpi_funcs.c
 CU_FILES = cuda_funcs.cu
-O_FILES = main.o c_funcs.o cuda_funcs.o
+O_FILES = main.o c_funcs.o mpi_funcs.o cuda_funcs.o
 
 build:
-	mpicxx -fopenmp -c main.c -o main.o
-	mpicxx -fopenmp -c cpu_funcs.c -o c_funcs.o
-	nvcc -I./inc -c $(CU_FILES) -o cuda_funcs.o
+	mpicxx -fopenmp -c $(LIBS) $(CFLAGS) main.c -o main.o
+	mpicxx -fopenmp -c $(LIBS) $(CFLAGS) cpu_funcs.c -o c_funcs.o
+	mpicxx -fopenmp -c $(LIBS) $(CFLAGS) mpi_funcs.c -o mpi_funcs.o
+	nvcc -I./inc -c $(LIBS) $(CU_FILES) -o cuda_funcs.o
 	mpicxx -fopenmp -o mpiCudaOpenMP $(O_FILES) /usr/local/cuda-9.1/lib64/libcudart_static.a -ldl -lrt
 
 clean:

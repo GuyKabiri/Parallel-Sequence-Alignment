@@ -5,6 +5,10 @@
 
 #include "main.h"
 #include "cpu_funcs.h"
+#include "mpi_funcs.h"
+
+extern MPI_Datatype mutant_type;
+extern MPI_Datatype program_data_type;
 
 int main(int argc, char* argv[])
 {
@@ -15,26 +19,10 @@ int main(int argc, char* argv[])
     MPI_Init(&argc, &argv);	//	start MPI
     MPI_Comm_rank(MPI_COMM_WORLD, &pid);		//	get process rank
 	MPI_Comm_size(MPI_COMM_WORLD, &num_processes);	//	get number of processes
-
-    MPI_Status status;
+    
     /* create a type for data struct */
-
-    				//	number of blocks for each parameter
-	int          	blocklengths[NUM_OF_PARAMS] = { 1, 1, SEQ1_MAX_LEN, SEQ2_MAX_LEN, WEIGHTS_COUNT };
-	
-					//	offset of each parameter, calculated by size of previous parameters
-	MPI_Aint 		displacements[NUM_OF_PARAMS] = {    0,                              //  _data.seq1 offset
-
-                                                        sizeof(int),
-                                                        sizeof(int) * 2,
-                                                        sizeof(int) * 2 + sizeof(char) * SEQ1_MAX_LEN,
-                                                        sizeof(int) * 2 + sizeof(char) * (SEQ1_MAX_LEN + SEQ2_MAX_LEN) };
-
-	MPI_Datatype 	types[NUM_OF_PARAMS] = { MPI_INT, MPI_INT, MPI_CHAR, MPI_CHAR, MPI_DOUBLE };
-
-	MPI_Type_create_struct(NUM_OF_PARAMS, blocklengths, displacements, types, &program_data_type);
-	MPI_Type_commit(&program_data_type);
-
+    program_data_type_initiate();
+    mutant_type_initiate();
 
     if (argc == 2)
     {
@@ -67,7 +55,9 @@ int main(int argc, char* argv[])
     if (pid == ROOT)
         printf("total time: %g\n", time);
 
-    MPI_Type_free(&program_data_type);
+    mpi_free_type(&program_data_type);
+    mpi_free_type(&mutant_type);
+
 	MPI_Finalize();
 
     return 0;

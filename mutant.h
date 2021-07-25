@@ -9,4 +9,6 @@ typedef struct _mutant {
     char ch;
 } Mutant;
 
+#define NUM_OF_PARAMS_MUTANT 3
+
 #endif //   __MUTANT_H__

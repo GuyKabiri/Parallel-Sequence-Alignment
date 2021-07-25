@@ -9,13 +9,23 @@
 #include "program_data.h"
 #include "mutant.h"
 #include "cuda_funcs.h"
+#include "mpi_funcs.h"
 
 // #define PRINT_SIGN_MAT
 
+
+// #if (!(defined(__CUDA_ARCH__) && (__CUDA_ARCH__ > 0)))
+
 char hashtable_cpu[NUM_CHARS][NUM_CHARS];
+char conservatives_cpu[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
+char semi_conservatives_cpu[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
+
+// #endif
+
 
 extern int cuda_percentage;
 extern MPI_Datatype program_data_type;
+extern MPI_Datatype mutant_type;
 
 void cpu_run_program(int pid, int num_processes)
 {
@@ -80,7 +90,7 @@ void cpu_run_program(int pid, int num_processes)
     Mutant my_mutant;
 
     if (cpu_tasks > 0)
-    {
+    {   
         cpu_best_score = find_best_mutant_cpu(pid, &data, &my_mutant, cpu_first_offset, cpu_last_offset);
     }
 
@@ -120,9 +130,7 @@ void cpu_run_program(int pid, int num_processes)
     //  if the sender is not the ROOT (ROOT does not need to send the best value to himself)
     if (sender != ROOT && pid == sender)
     {
-        MPI_Send(&final_best_mutant.offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
-        MPI_Send(&final_best_mutant.char_offset, 1, MPI_INT, ROOT, 0, MPI_COMM_WORLD);
-        MPI_Send(&final_best_mutant.ch, 1, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD);
+        MPI_Send(&final_best_mutant, 1, mutant_type, ROOT, 0, MPI_COMM_WORLD);
     }
     
     if (pid == ROOT)
@@ -131,9 +139,7 @@ void cpu_run_program(int pid, int num_processes)
         if (sender != ROOT)     //  if ROOT process does not have the best score -> retrieve it from the process that does
         {
             final_best_score = gloabl_best[0];        //  best score already sent to all processes by MPI_Allreduce
-    	    MPI_Recv(&final_best_mutant.offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
-    	    MPI_Recv(&final_best_mutant.char_offset, 1, MPI_INT, sender, 0, MPI_COMM_WORLD, &status);
-    	    MPI_Recv(&final_best_mutant.ch, 1, MPI_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+    	    MPI_Recv(&final_best_mutant, 1, mutant_type, sender, 0, MPI_COMM_WORLD, &status);
         }
         
         char mut[SEQ2_MAX_LEN];
@@ -194,8 +200,6 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
             best_mutant.offset = curr_offset;
             best_score = curr_score;
         }
-        // printf("pid %2d, tid %2d, offset %3d\n", pid, omp_get_thread_num(), curr_offset);
-                // printf("%d\n", curr_offset);
     }
 
     //  synchronize writing to the global score
@@ -279,7 +283,7 @@ double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offs
 
         substitute = find_char(c1, c2, weights, is_max);
         mutant_diff = get_weight(get_hash_sign(c1, substitute), weights) - pair_score;    //  difference between original and mutation weights
-        mutant_diff = abs(mutant_diff);
+        mutant_diff = fabs(mutant_diff);
 
         if (mutant_diff > best_mutant_diff || i == 0)
         {
@@ -288,6 +292,7 @@ double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offs
             mt->char_offset = i;        //  offset of char inside seq2
         }
     }
+
     if (is_max)
         return total_score + best_mutant_diff;
     return total_score - best_mutant_diff;     //  best mutant is returned in struct mt
@@ -383,6 +388,6 @@ void print_with_offset(char* chrs, int offset, int char_offset)
     printf("%c", chrs[char_offset]);
     printf("\033[0m");
 
-    for (int i = char_offset + 1; i < strlen(chrs); i++)
+    for (uint i = char_offset + 1; i < strlen(chrs); i++)
         printf("%c", chrs[i]);       //  print signs sequence
 }
