@@ -228,18 +228,15 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
 
 void fill_hash(double* weights, int pid)
 {
-    // printf("********************************************************************************************** %2d\n", omp_get_thread_num());
+    char c1, c2;
 #pragma omp parallel for
     for (int i = 0; i < NUM_CHARS; i++)
     {
-        char c1 = FIRST_CHAR + i;               //  FIRST_CHAR = A -> therefore (FIRST_CHAR + i) will represent all characters from A to Z
+        c1 = FIRST_CHAR + i;               //  FIRST_CHAR = A -> therefore (FIRST_CHAR + i) will represent all characters from A to Z
         for (int j = 0; j <= i; j++)            //  it would be time-consuming to fill the top triangle of a hash table, because it is cyclic (hash[x][y] = hash[y][x])
         {
-            char c2 = FIRST_CHAR + j;
+            c2 = FIRST_CHAR + j;
             hashtable_cpu[i][j] = evaluate_chars(c1, c2);
-            // printf("--------------------------------------------------------------------------------- %2d, %2d, id=%2d, %2d\n", i, j, omp_get_thread_num(), omp_get_num_threads());
-    // printf("********************************************************************************************** %2d\n", omp_get_thread_num());
-
         }
         hashtable_cpu[i][NUM_CHARS] = SPACE;    //  each char with '-' (hash[ch][-])
     }
@@ -273,41 +270,6 @@ void print_hash()
     printf("%c ", get_hash_sign(DASH, DASH));
     printf("\n");
 }
-
-// //  find the best mutant for a given offset
-// double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, int is_max, Mutant* mt)
-// {
-//     int seq1_idx, seq2_idx;
-//     double total_score = 0;
-//     double pair_score, mutant_diff, best_mutant_diff;
-//     int iterations = strlen(seq2);
-//     char c1, c2, substitute;
-
-//     for (int i = 0; i < iterations; i++)            //  iterate over all the characters
-//     {
-//         seq1_idx = offset + i;                      //  index of seq1
-//         seq2_idx = i;                               //  index of seq2
-//         c1 = seq1[seq1_idx];                   //  current char in seq1
-//         c2 = seq2[seq2_idx];                   //  current char in seq2
-//         pair_score = get_weight(get_hash_sign(c1, c2), weights);    //  get weight before substitution
-//         total_score += pair_score;
-
-//         substitute = find_char(c1, c2, weights, is_max);
-//         mutant_diff = get_weight(get_hash_sign(c1, substitute), weights) - pair_score;    //  difference between original and mutation weights
-//         mutant_diff = fabs(mutant_diff);
-
-//         if (mutant_diff > best_mutant_diff || i == 0)
-//         {
-//             best_mutant_diff = mutant_diff;
-//             mt->ch = substitute;
-//             mt->char_offset = i;        //  offset of char inside seq2
-//         }
-//     }
-
-//     if (is_max)
-//         return total_score + best_mutant_diff;
-//     return total_score - best_mutant_diff;     //  best mutant is returned in struct mt
-// }
 
 //  reads two sequences, weights, and the assignment type (maximum / minimum) from a input file
 ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)

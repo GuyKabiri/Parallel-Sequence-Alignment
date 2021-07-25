@@ -156,27 +156,15 @@ double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_off
 __global__ void find_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;        //  calculate thread index in the arrays
-    // printf("%2d, %2d, %2d\n", blockDim.x, blockDim.y, blockDim.z);
-    // printf("%2d, %2d, %2d\n", blockIdx.x, blockIdx.y, blockIdx.z);
-    // printf("%2d, %2d, %2d\n", threadIdx.x, threadIdx.y, threadIdx.z);
-
-    // printf("index=%3d val=%f\n", idx, scores[idx]);
-    // printf("%c\n", char_hash_cuda[0][0]);
-    // fill_hashtable_gpu();  
-
 
     int offsets = last_offset - first_offset;
-
     if (idx >= offsets)
     {
-        scores[idx] = 0;
+        scores[idx] = data->is_max ? INT_MIN : INT_MAX;
         return;
     }
 
     scores[idx] = find_best_mutant_offset(data, first_offset + idx, &mutants[idx]);
-    // printf("off=%2d charoff=%2d, %f, %f\n", mutants[idx].offset, mutants[idx].char_offset, scores[idx]);
-
-    __syncthreads();
 }
 
 __host__ __device__ double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt)
@@ -268,41 +256,46 @@ __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w)
     char colon_sub = get_char_by_sign_with_restrictions(c1, COLON, c2);
     char dot_sub = get_char_by_sign_with_restrictions(c1, DOT, c2);
     char space_sub = get_char_by_sign_with_restrictions(c1, SPACE, c2);
-    char ch;
-
-    double colon_diff, dot_diff, space_diff;
+    char substitue;
+    
+    double diff1, diff2;
+    char sub1, sub2;
 
     switch (sign)
     {
     case ASTERISK:
-        dot_diff = - w[ASTERISK_W] - w[DOT_W];
-        space_diff = - w[ASTERISK_W] - w[SPACE_W];
-
-        return find_optimal_char(FALSE, dot_diff, dot_sub, space_diff, space_sub);
-
+        diff1 = - w[ASTERISK_W] - w[DOT_W];     sub1 = dot_sub;     //  DOT differences
+        diff2 = - w[ASTERISK_W] - w[SPACE_W];   sub2 = space_sub;   //  SPACE differences
+        break;
     
     case COLON:
-        dot_diff = w[COLON_W] - w[DOT_W];
-        space_diff = w[COLON_W] - w[SPACE_W];
-
-        return find_optimal_char(FALSE, dot_diff, dot_sub, space_diff, space_sub);
-
+        diff1 = w[COLON_W] - w[DOT_W];      sub1 = dot_sub;      //  DOT differences
+        diff2 = w[COLON_W] - w[SPACE_W];    sub2 = space_sub;    //  SPACE differences
+        break;
 
     case DOT:
-        colon_diff = w[DOT_W] - w[COLON_W];
-        space_diff = w[DOT_W] - w[SPACE_W];
-
-        ch = find_optimal_char(FALSE, colon_diff, colon_sub, space_diff, space_sub);
-        return ch == NOT_FOUND_CHAR ? ASTERISK : NOT_FOUND_CHAR;
+        diff1 = w[DOT_W] - w[COLON_W];      sub1 = colon_sub;      //  COLON differences
+        diff2 = w[DOT_W] - w[SPACE_W];      sub2 = space_sub;      //  SPACE differences
+        break;
 
     case SPACE:
-        colon_diff = w[SPACE_W] - w[COLON_W];
-        dot_diff = w[SPACE_W] - w[DOT_W];
-
-        ch = find_optimal_char(FALSE, colon_diff, colon_sub, dot_diff, dot_sub);
-        return ch == NOT_FOUND_CHAR ? ASTERISK : NOT_FOUND_CHAR;
+        diff1 = w[SPACE_W] - w[COLON_W];    sub1 = colon_sub;    //  COLON differences
+        diff2 = w[SPACE_W] - w[DOT_W];      sub2 = dot_sub;      //  DOT differences
+        break;
     }
-    return NOT_FOUND_CHAR;      //  sign was not any of the legal signs
+    
+    if (sign == ASTERISK || sign == COLON)
+        return find_optimal_char(FALSE, diff1, sub1, diff2, sub2);
+
+
+    //  if sign is SPACE or DOT, and a substitution would not be possible
+    //  C1 will returned because ASTERISK subtitution will always be possible
+    substitue = find_optimal_char(FALSE, diff1, sub1, diff2, sub2);
+
+    if ((sign == DOT || sign == SPACE) && substitue == NOT_FOUND_CHAR)
+        return c1;
+
+    return substitue;
 }
 
 __host__ __device__ char find_optimal_char(int is_max, double diff1, char sub1, double diff2, char sub2)
