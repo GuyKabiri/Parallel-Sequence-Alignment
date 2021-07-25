@@ -28,11 +28,11 @@ extern char hashtable_cpu[NUM_CHARS][NUM_CHARS];
 double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_offset, int last_offset);
 
 __global__ void find_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset);
-__device__ double find_best_mutant_offset_gpu(ProgramData* data, int offset, Mutant* mt);
+__host__ __device__ double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt);
 __host__ __device__ char find_char(char c1, char c2, double* w, int is_max);
 __host__ __device__ char find_max_char(char c1, char c2, char sign, double* w);
 __host__ __device__ char find_min_char(char c1, char c2, char sign, double* w);
-__host__ __device__ char find_optimal_char(int is_max, double diff1, char sub1, double diff2, char sub2, char def_char);
+__host__ __device__ char find_optimal_char(int is_max, double diff1, char sub1, double diff2, char sub2);
 __host__ __device__ char get_char_by_sign_with_restrictions(char by, char sign, char rest);
 
 __host__ __device__ char get_hash_sign(char c1, char c2);

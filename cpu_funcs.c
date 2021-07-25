@@ -84,8 +84,8 @@ void initiate_program(int pid, int num_processes)
 
     double gpu_best_score = data.is_max ? INT_MIN : INT_MAX;
     double cpu_best_score = data.is_max ? INT_MIN : INT_MAX;
-    Mutant gpu_mutant;
-    Mutant my_mutant;
+    Mutant gpu_mutant = { -1, -1, NOT_FOUND_CHAR };
+    Mutant cpu_mutant = { -1, -1, NOT_FOUND_CHAR };
 
 // #pragma omp parallel
 {
@@ -100,7 +100,7 @@ void initiate_program(int pid, int num_processes)
 
     if (cpu_tasks > 0)
     {   
-        cpu_best_score = find_best_mutant_cpu(pid, &data, &my_mutant, cpu_first_offset, cpu_last_offset);
+        cpu_best_score = find_best_mutant_cpu(pid, &data, &cpu_mutant, cpu_first_offset, cpu_last_offset);
     }
 }
 
@@ -111,7 +111,7 @@ void initiate_program(int pid, int num_processes)
     if ((data.is_max && cpu_best_score > gpu_best_score) || 
         (!data.is_max && cpu_best_score < gpu_best_score))
     {
-        final_best_mutant = my_mutant;
+        final_best_mutant = cpu_mutant;
         final_best_score = cpu_best_score;
     }
 
@@ -166,6 +166,9 @@ void initiate_program(int pid, int num_processes)
     	}
     	fclose(out_file);
         
+        if (cpu_tasks == 0) //  if the root CPU did not had any tasks, it's hashtable is empty, therefore, it will fill it now for printing
+            fill_hash(data.weights, pid);
+
         pretty_print(&data, mut, final_best_mutant.offset, final_best_mutant.char_offset);
     }
 }
@@ -177,7 +180,6 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
     if (pid == ROOT)
         print_hash();
 #endif
-
     
     //  global variable for the best score among all threads
     double gloabl_score = data->is_max ? INT_MIN : INT_MAX;
@@ -193,7 +195,7 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
     for (int curr_offset = first_offset; curr_offset < last_offset; curr_offset++)    //  iterate for amount of tasks
     {     
         //  clculate this offset score, and find the best mutant in that offset
-        curr_score = find_best_mutant_offset(data->seq1, data->seq2, data->weights, curr_offset, data->is_max, &temp_mutant);
+        curr_score = find_best_mutant_offset(data, curr_offset, &temp_mutant);
 
         to_save = (data->is_max) ?                  //  if this is a maximum problem
                     (curr_score > best_score) :     //  save if the current score is greater than the best
@@ -257,11 +259,11 @@ void print_hash()
     for (int i = FIRST_CHAR; i < last_char; i++)
     {
         printf("%c |", i);
-        for (int j = FIRST_CHAR; j < last_char + 1; j++)
+        for (int j = FIRST_CHAR; j < last_char; j++)
         {
             printf("%c ", get_hash_sign(i, j));
         }
-        printf("\n");
+        printf("%c \n", get_hash_sign(i, DASH));
     }
     printf("%c |", DASH);
     for (int i = FIRST_CHAR; i < last_char; i++)
@@ -272,40 +274,40 @@ void print_hash()
     printf("\n");
 }
 
-//  find the best mutant for a given offset
-double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, int is_max, Mutant* mt)
-{
-    int seq1_idx, seq2_idx;
-    double total_score = 0;
-    double pair_score, mutant_diff, best_mutant_diff;
-    int iterations = strlen(seq2);
-    char c1, c2, substitute;
+// //  find the best mutant for a given offset
+// double find_best_mutant_offset(char* seq1, char* seq2, double* weights, int offset, int is_max, Mutant* mt)
+// {
+//     int seq1_idx, seq2_idx;
+//     double total_score = 0;
+//     double pair_score, mutant_diff, best_mutant_diff;
+//     int iterations = strlen(seq2);
+//     char c1, c2, substitute;
 
-    for (int i = 0; i < iterations; i++)            //  iterate over all the characters
-    {
-        seq1_idx = offset + i;                      //  index of seq1
-        seq2_idx = i;                               //  index of seq2
-        c1 = seq1[seq1_idx];                   //  current char in seq1
-        c2 = seq2[seq2_idx];                   //  current char in seq2
-        pair_score = get_weight(get_hash_sign(c1, c2), weights);    //  get weight before substitution
-        total_score += pair_score;
+//     for (int i = 0; i < iterations; i++)            //  iterate over all the characters
+//     {
+//         seq1_idx = offset + i;                      //  index of seq1
+//         seq2_idx = i;                               //  index of seq2
+//         c1 = seq1[seq1_idx];                   //  current char in seq1
+//         c2 = seq2[seq2_idx];                   //  current char in seq2
+//         pair_score = get_weight(get_hash_sign(c1, c2), weights);    //  get weight before substitution
+//         total_score += pair_score;
 
-        substitute = find_char(c1, c2, weights, is_max);
-        mutant_diff = get_weight(get_hash_sign(c1, substitute), weights) - pair_score;    //  difference between original and mutation weights
-        mutant_diff = fabs(mutant_diff);
+//         substitute = find_char(c1, c2, weights, is_max);
+//         mutant_diff = get_weight(get_hash_sign(c1, substitute), weights) - pair_score;    //  difference between original and mutation weights
+//         mutant_diff = fabs(mutant_diff);
 
-        if (mutant_diff > best_mutant_diff || i == 0)
-        {
-            best_mutant_diff = mutant_diff;
-            mt->ch = substitute;
-            mt->char_offset = i;        //  offset of char inside seq2
-        }
-    }
+//         if (mutant_diff > best_mutant_diff || i == 0)
+//         {
+//             best_mutant_diff = mutant_diff;
+//             mt->ch = substitute;
+//             mt->char_offset = i;        //  offset of char inside seq2
+//         }
+//     }
 
-    if (is_max)
-        return total_score + best_mutant_diff;
-    return total_score - best_mutant_diff;     //  best mutant is returned in struct mt
-}
+//     if (is_max)
+//         return total_score + best_mutant_diff;
+//     return total_score - best_mutant_diff;     //  best mutant is returned in struct mt
+// }
 
 //  reads two sequences, weights, and the assignment type (maximum / minimum) from a input file
 ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)
@@ -339,13 +341,21 @@ void pretty_print(ProgramData* data, char* mut, int offset, int char_offset)
 {
     if (!data || !mut)  return;
 
-    char signs[SEQ2_MAX_LEN] = { '\0' };
-    double score = get_score_and_signs(data->seq1, data->seq2, data->weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
-
-    printf("%s problem\n", data->is_max ? "Maximum" : "Minimum");
+    printf("\033[0;31m%s\033[0m problem\n", data->is_max ? "Maximum" : "Minimum");
     printf("Weights: ");
     for (int i = 0; i < WEIGHTS_COUNT; i++)
         printf("%g ", data->weights[i]);
+
+    if (offset == -1)
+    {
+        printf("\n\033[0;31mThere are no mutations found\033[0m\n");
+        printf("%s\n%s\n", data->seq1, data->seq2);
+        return;
+    }
+
+    char signs[SEQ2_MAX_LEN] = { '\0' };
+    double score = get_score_and_signs(data->seq1, data->seq2, data->weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
+
     printf("\nOriginal Score: %g\n", score);
 
     print_with_offset(signs, offset, char_offset);
@@ -372,9 +382,9 @@ double get_score_and_signs(char* seq1, char* seq2, double* weights, int offset, 
 {
     int idx1 = offset;
     int idx2 = 0;
-    int iterations = strlen(seq2);
+    int num_chars = strlen(seq2);
     double score = 0;
-    for (int i = 0; i < iterations; i++, idx1++, idx2++)
+    for (   ; idx2 < num_chars; idx1++, idx2++)
     {   
         signs[idx2] = get_hash_sign(seq1[idx1], seq2[idx2]);
         score += get_weight(signs[idx2], weights);

@@ -6,6 +6,7 @@
 #define DOT         '.'     //  w3
 #define SPACE       '_'     //  w4
 #define DASH        '-'
+
 #define NOT_FOUND_CHAR '\0'
 
 #define ASTERISK_W  0
@@ -21,8 +22,8 @@
 #define TRUE 1
 #define FALSE 0
 
-#define NUM_CHARS 26
 #define FIRST_CHAR 'A'
+#define NUM_CHARS 26
 
 #define CONSERVATIVE_COUNT 9
 #define SEMI_CONSERVATIVE_COUNT 11
