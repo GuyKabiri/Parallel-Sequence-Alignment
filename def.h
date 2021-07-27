@@ -5,7 +5,7 @@
 #define COLON       ':'     //  w2
 #define DOT         '.'     //  w3
 #define SPACE       '_'     //  w4
-#define DASH        '-'
+#define HYPHEN      '-'
 
 #define NOT_FOUND_CHAR '\0'
 

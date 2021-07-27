@@ -11,7 +11,8 @@
 #include "program_data.h"
 #include "mutant.h"
 
-#define BLOCK_SIZE  256
+// #define BLOCK_SIZE  256
+#define BLOCK_MAX_SIZE 1024
 
 __constant__  char conservatives_gpu[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
 __constant__  char semi_conservatives_gpu[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
@@ -25,9 +26,14 @@ extern char hashtable_cpu[NUM_CHARS][NUM_CHARS];
 
 #endif
 
-double gpu_run_program(ProgramData* data, Mutant* returned_mutant, int first_offset, int last_offset);
+double gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first_offset, int last_offset);
 
-__global__ void find_best_mutant_gpu(ProgramData* data, Mutant* mutants, double* scores, int first_offset, int last_offset);
+
+__global__ void max_reduction_chars(double* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars);
+__global__ void max_reduction_offsets(double* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars);
+__global__ void find_best_mutant_gpu(ProgramData* data, Mutant_GPU* mutants, double* scores, int offsets, int chars);
+__device__ int highest_power_of2(int n);
+
 __host__ __device__ double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt);
 __host__ __device__ char find_char(char c1, char c2, double* w, int is_max);
 __host__ __device__ char find_max_char(char c1, char c2, char sign, double* w);
@@ -43,7 +49,7 @@ __host__ __device__ int is_conservative(char c1, char c2);
 __host__ __device__ int is_semi_conservative(char c1, char c2);
 __host__ __device__ char evaluate_chars(char a, char b);
 
-__device__ int strlen_gpu(char* str);
+__host__ __device__ int my_strlen(char* str);
 __global__ void fill_hashtable_gpu();
 
 

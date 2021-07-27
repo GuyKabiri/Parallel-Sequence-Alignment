@@ -11,4 +11,9 @@ typedef struct _mutant {
 
 #define NUM_OF_PARAMS_MUTANT 3
 
+typedef struct _gpu_mutant {
+    Mutant mutant;
+    double diff;
+} Mutant_GPU;
+
 #endif //   __MUTANT_H__

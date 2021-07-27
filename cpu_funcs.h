@@ -4,6 +4,8 @@
 #include "program_data.h"
 #include "mutant.h"
 
+// #define PRINT_SIGN_MAT
+
 void initiate_program(int pid, int num_processes);
 
 void fill_hash(double* weights, int pid);

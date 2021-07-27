@@ -11,7 +11,6 @@
 #include "cuda_funcs.h"
 #include "mpi_funcs.h"
 
-// #define PRINT_SIGN_MAT
 
 
 // #if (!(defined(__CUDA_ARCH__) && (__CUDA_ARCH__ > 0)))
@@ -62,9 +61,7 @@ void initiate_program(int pid, int num_processes)
     int last_offset = per_proc_tasks + first_offset;
     if (pid == num_processes - 1)    //  if the tasks do not divide by the number of processes, the last process will handle any additional tasks
         last_offset += total_tasks % num_processes;
-
-
-
+        
     int gpu_tasks = (last_offset - first_offset) * cuda_percentage / 100;
     int gpu_first_offset = first_offset;
     int gpu_last_offset = gpu_first_offset + gpu_tasks;
@@ -105,6 +102,8 @@ void initiate_program(int pid, int num_processes)
 }
 
     printf("cpu tasks=%3d, cpu best score=%lf\ngpu tasks=%3d, gpu best score=%lf\n", cpu_tasks, cpu_best_score, gpu_tasks, gpu_best_score);
+
+    printf("%d, %d, (%c)\n", gpu_mutant.offset, gpu_mutant.char_offset, gpu_mutant.ch);
 
     Mutant final_best_mutant = gpu_mutant;
     double final_best_score = gpu_best_score;
@@ -176,36 +175,31 @@ void initiate_program(int pid, int num_processes)
 double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset)
 {
     fill_hash(data->weights, pid);
-#ifdef PRINT_SIGN_MAT
-    if (pid == ROOT)
-        print_hash();
-#endif
     
     //  global variable for the best score among all threads
     double gloabl_score = data->is_max ? INT_MIN : INT_MAX;
 #pragma omp parallel
 {
-    double best_score = data->is_max ? INT_MIN : INT_MAX;      //  private variable for thread's best score
-    double curr_score;          //  private variable for thread's specific offset score
-    Mutant best_mutant;         //  private variable for thread's best mutant
-    Mutant temp_mutant;         //  private variable for thread's specific offset mutant
+    double _best_score = data->is_max ? INT_MIN : INT_MAX;      //  private variable for thread's best score
+    double _curr_score;          //  private variable for thread's specific offset score
+    Mutant _best_mutant, _temp_mutant;         //  private variables for thread's best and temp mutants
     int to_save;                //  private variable whether to save the current score or not
 
 #pragma omp for nowait      //  each thread will calculate some of the process tasks and save it's best mutant
     for (int curr_offset = first_offset; curr_offset < last_offset; curr_offset++)    //  iterate for amount of tasks
     {     
         //  clculate this offset score, and find the best mutant in that offset
-        curr_score = find_best_mutant_offset(data, curr_offset, &temp_mutant);
+        _curr_score = find_best_mutant_offset(data, curr_offset, &_temp_mutant);
 
         to_save = (data->is_max) ?                  //  if this is a maximum problem
-                    (curr_score > best_score) :     //  save if the current score is greater than the best
-                    (curr_score < best_score);      //  otherwise, save if the current score is smaller than the best
+                    (_curr_score > _best_score) :     //  save if the current score is greater than the best
+                    (_curr_score < _best_score);      //  otherwise, save if the current score is smaller than the best
 
         if (to_save)              //  if found better mutation, or it is the first iteration
         {
-            best_mutant = temp_mutant;
-            best_mutant.offset = curr_offset;
-            best_score = curr_score;
+            _best_mutant = _temp_mutant;
+            _best_mutant.offset = curr_offset;
+            _best_score = _curr_score;
         }
     }
 
@@ -213,13 +207,13 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
     #pragma omp critical
     {
         to_save = (data->is_max) ?                  //  if this is a maximum problem
-                    (best_score > gloabl_score) :     //  save if the current score is greater than the best
-                    (best_score < gloabl_score);      //  otherwise, save if the current score is smaller than the best
+                    (_best_score > gloabl_score) :     //  save if the current score is greater than the best
+                    (_best_score < gloabl_score);      //  otherwise, save if the current score is smaller than the best
 
         if (to_save)
         {
-            gloabl_score = best_score;
-            *return_mutant = best_mutant;
+            gloabl_score = _best_score;
+            *return_mutant = _best_mutant;
         }
     }
 }
@@ -248,7 +242,7 @@ void print_hash()
     printf("   ");
     for (int i = FIRST_CHAR; i < last_char; i++)
         printf("%c ", i);
-    printf("%c\n", DASH);
+    printf("%c\n", HYPHEN);
     printf("   ");
     for (int i = FIRST_CHAR; i < last_char + 1; i++)
         printf("__");
@@ -260,14 +254,14 @@ void print_hash()
         {
             printf("%c ", get_hash_sign(i, j));
         }
-        printf("%c \n", get_hash_sign(i, DASH));
+        printf("%c \n", get_hash_sign(i, HYPHEN));
     }
-    printf("%c |", DASH);
+    printf("%c |", HYPHEN);
     for (int i = FIRST_CHAR; i < last_char; i++)
     {
-        printf("%c ", get_hash_sign(DASH, i));
+        printf("%c ", get_hash_sign(HYPHEN, i));
     }
-    printf("%c ", get_hash_sign(DASH, DASH));
+    printf("%c ", get_hash_sign(HYPHEN, HYPHEN));
     printf("\n");
 }
 
@@ -302,6 +296,10 @@ int write_results_to_file(FILE* file, char* mutant, int offset, double score)
 void pretty_print(ProgramData* data, char* mut, int offset, int char_offset)
 {
     if (!data || !mut)  return;
+
+#ifdef PRINT_SIGN_MAT
+    print_hash();
+#endif
 
     printf("\033[0;31m%s\033[0m problem\n", data->is_max ? "Maximum" : "Minimum");
     printf("Weights: ");

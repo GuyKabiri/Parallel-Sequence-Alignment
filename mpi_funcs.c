@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include "mpi_funcs.h"
 #include "def.h"
 #include "program_data.h"
@@ -18,6 +19,11 @@ void program_data_type_initiate()
 														sizeof(int),	//  _data.weights
 														sizeof(int) + sizeof(double) * WEIGHTS_COUNT,	//  _data.seq1
 														sizeof(int) + sizeof(double) * WEIGHTS_COUNT + sizeof(char) * SEQ1_MAX_LEN };	//  _data.seq2
+
+	// MPI_Aint 		displacements[NUM_OF_PARAMS_DATA] = {    offsetof(struct _data, is_max),			//  _data.is_max
+	// 													sizeof(int),	//  _data.weights
+	// 													sizeof(int) + sizeof(double) * WEIGHTS_COUNT,	//  _data.seq1
+	// 													sizeof(int) + sizeof(double) * WEIGHTS_COUNT + sizeof(char) * SEQ1_MAX_LEN };	//  _data.seq2
 
 	MPI_Datatype 	types[NUM_OF_PARAMS_DATA] = { MPI_INT, MPI_DOUBLE, MPI_CHAR, MPI_CHAR };
 
