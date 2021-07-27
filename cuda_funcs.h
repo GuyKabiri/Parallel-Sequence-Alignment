@@ -31,7 +31,7 @@ double gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first
 
 __global__ void max_reduction_chars(double* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars);
 __global__ void max_reduction_offsets(double* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars);
-__global__ void find_best_mutant_gpu(ProgramData* data, Mutant_GPU* mutants, double* scores, int offsets, int chars);
+__global__ void find_best_mutant_gpu(ProgramData* data, Mutant_GPU* mutants, double* scores, int offsets, int chars, int start_offset);
 __device__ int highest_power_of2(int n);
 
 __host__ __device__ double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt);

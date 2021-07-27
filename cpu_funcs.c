@@ -103,7 +103,7 @@ void initiate_program(int pid, int num_processes)
 
     printf("cpu tasks=%3d, cpu best score=%lf\ngpu tasks=%3d, gpu best score=%lf\n", cpu_tasks, cpu_best_score, gpu_tasks, gpu_best_score);
 
-    printf("%d, %d, (%c)\n", gpu_mutant.offset, gpu_mutant.char_offset, gpu_mutant.ch);
+    // printf("%d, %d, (%c)\n", gpu_mutant.offset, gpu_mutant.char_offset, gpu_mutant.ch);
 
     Mutant final_best_mutant = gpu_mutant;
     double final_best_score = gpu_best_score;
