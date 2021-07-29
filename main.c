@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
 {
     int  pid;			//	rank of process
 	int  num_processes;     //	number of processes
-    double time = MPI_Wtime();
+    float time = MPI_Wtime();
     
     MPI_Init(&argc, &argv);	//	start MPI
     MPI_Comm_rank(MPI_COMM_WORLD, &pid);		//	get process rank

@@ -13,7 +13,7 @@ typedef struct _mutant {
 
 typedef struct _gpu_mutant {
     Mutant mutant;
-    double diff;
+    float diff;
 } Mutant_GPU;
 
 #endif //   __MUTANT_H__

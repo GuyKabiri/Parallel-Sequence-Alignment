@@ -79,8 +79,10 @@ void initiate_program(int pid, int num_processes)
             cpu_first_offset,
             cpu_last_offset);
 
-    double gpu_best_score = data.is_max ? INT_MIN : INT_MAX;
-    double cpu_best_score = data.is_max ? INT_MIN : INT_MAX;
+    // float gpu_best_score = data.is_max ? INT_MIN : INT_MAX;
+    // float cpu_best_score = data.is_max ? INT_MIN : INT_MAX;
+    float gpu_best_score = data.is_max ? -INFINITY : INFINITY;
+    float cpu_best_score = data.is_max ? -INFINITY : INFINITY;
     Mutant gpu_mutant = { -1, -1, NOT_FOUND_CHAR };
     Mutant cpu_mutant = { -1, -1, NOT_FOUND_CHAR };
 
@@ -106,7 +108,7 @@ void initiate_program(int pid, int num_processes)
     // printf("%d, %d, (%c)\n", gpu_mutant.offset, gpu_mutant.char_offset, gpu_mutant.ch);
 
     Mutant final_best_mutant = gpu_mutant;
-    double final_best_score = gpu_best_score;
+    float final_best_score = gpu_best_score;
     if ((data.is_max && cpu_best_score > gpu_best_score) || 
         (!data.is_max && cpu_best_score < gpu_best_score))
     {
@@ -172,16 +174,19 @@ void initiate_program(int pid, int num_processes)
     }
 }
 
-double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset)
+float find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset)
 {
     fill_hash(data->weights, pid);
     
     //  global variable for the best score among all threads
-    double gloabl_score = data->is_max ? INT_MIN : INT_MAX;
+    // float gloabl_score = data->is_max ? INT_MIN : INT_MAX;
+    float gloabl_score = data->is_max ? -INFINITY : INFINITY;
 #pragma omp parallel
 {
-    double _best_score = data->is_max ? INT_MIN : INT_MAX;      //  private variable for thread's best score
-    double _curr_score;          //  private variable for thread's specific offset score
+    // float _best_score = data->is_max ? INT_MIN : INT_MAX;      //  private variable for thread's best score
+    float _best_score = data->is_max ? -INFINITY : INFINITY;      //  private variable for thread's best score
+
+    float _curr_score;          //  private variable for thread's specific offset score
     Mutant _best_mutant, _temp_mutant;         //  private variables for thread's best and temp mutants
     int to_save;                //  private variable whether to save the current score or not
 
@@ -195,14 +200,17 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
                     (_curr_score > _best_score) :     //  save if the current score is greater than the best
                     (_curr_score < _best_score);      //  otherwise, save if the current score is smaller than the best
 
+        // printf("off=%3d, %g\n", curr_offset, _curr_score);
+
         if (to_save)              //  if found better mutation, or it is the first iteration
         {
             _best_mutant = _temp_mutant;
             _best_mutant.offset = curr_offset;
             _best_score = _curr_score;
         }
-    }
 
+    }
+    
     //  synchronize writing to the global score
     #pragma omp critical
     {
@@ -220,7 +228,7 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
     return gloabl_score;
 }
 
-void fill_hash(double* weights, int pid)
+void fill_hash(float* weights, int pid)
 {
     char c1, c2;
 #pragma omp parallel for
@@ -271,7 +279,7 @@ ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)
     if (!file || !data)  return NULL;   //  if file or structure did not allocated
 
     //  first, read the 4 weights, after read 2 sequences of characters
-    if (fscanf(file, "%lf %lf %lf %lf", &data->weights[0], &data->weights[1], &data->weights[2], &data->weights[3]) != 4)   return NULL;
+    if (fscanf(file, "%f %f %f %f", &data->weights[0], &data->weights[1], &data->weights[2], &data->weights[3]) != 4)   return NULL;
     if (fscanf(file, "%s", data->seq1) != 1)   return NULL;
     if (fscanf(file, "%s", data->seq2) != 1)   return NULL;
 
@@ -285,7 +293,7 @@ ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)
 
 //	write the results into a file
 //	return 0 on error, otherwise 1
-int write_results_to_file(FILE* file, char* mutant, int offset, double score)
+int write_results_to_file(FILE* file, char* mutant, int offset, float score)
 {
 	if (!file || !mutant)	return 0;
 
@@ -314,7 +322,7 @@ void pretty_print(ProgramData* data, char* mut, int offset, int char_offset)
     }
 
     char signs[SEQ2_MAX_LEN] = { '\0' };
-    double score = get_score_and_signs(data->seq1, data->seq2, data->weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
+    float score = get_score_and_signs(data->seq1, data->seq2, data->weights, offset, signs);    //  evaluate the score of the sequences by the wanted offset, and create the signs sequence
 
     printf("\nOriginal Score: %g\n", score);
 
@@ -338,12 +346,12 @@ void pretty_print(ProgramData* data, char* mut, int offset, int char_offset)
     printf("Seq offset=%3d, Char offset=%3d\n", offset, char_offset);
 }
 
-double get_score_and_signs(char* seq1, char* seq2, double* weights, int offset, char* signs)
+float get_score_and_signs(char* seq1, char* seq2, float* weights, int offset, char* signs)
 {
     int idx1 = offset;
     int idx2 = 0;
     int num_chars = strlen(seq2);
-    double score = 0;
+    float score = 0;
     for (   ; idx2 < num_chars; idx1++, idx2++)
     {   
         signs[idx2] = get_hash_sign(seq1[idx1], seq2[idx2]);

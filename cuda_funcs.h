@@ -11,6 +11,15 @@
 #include "program_data.h"
 #include "mutant.h"
 
+#ifdef PRINT_DEBUG_CUDA
+#define PRINT_DEBUG_CUDA_CHARS
+#define PRINT_DEBUG_CUDA_OFFSETS
+#endif
+
+#define PRINT_DEBUG_CUDA_CHARS
+// #define PRINT_DEBUG_CUDA_OFFSETS
+
+
 // #define BLOCK_SIZE  256
 #define BLOCK_MAX_SIZE 1024
 
@@ -26,23 +35,28 @@ extern char hashtable_cpu[NUM_CHARS][NUM_CHARS];
 
 #endif
 
-double gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first_offset, int last_offset);
+float gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first_offset, int last_offset);
+
+__global__ void max_reduction_chars2(float* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars);
+__global__ void max_reduction_offsets2(float* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars);
 
 
-__global__ void max_reduction_chars(double* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars);
-__global__ void max_reduction_offsets(double* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars);
-__global__ void find_best_mutant_gpu(ProgramData* data, Mutant_GPU* mutants, double* scores, int offsets, int chars, int start_offset);
-__device__ int highest_power_of2(int n);
+__global__ void max_reduction_chars(float* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars);
+__global__ void max_reduction_offsets(float* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars);
+__global__ void find_best_mutant_gpu(ProgramData* data, Mutant_GPU* mutants, float* scores, int offsets, int chars, int start_offset);
+__device__ int is_swapable(float* scores, Mutant_GPU* mutants, int idx1, int idx2, int is_max, int diff_only);
+__host__ __device__ int floor_highest_power_of2(int n);
+__host__ __device__ int ceil_highest_power_of2(int n);
 
-__host__ __device__ double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt);
-__host__ __device__ char find_char(char c1, char c2, double* w, int is_max);
-__host__ __device__ char find_max_char(char c1, char c2, char sign, double* w);
-__host__ __device__ char find_min_char(char c1, char c2, char sign, double* w);
-__host__ __device__ char find_optimal_char(int is_max, double diff1, char sub1, double diff2, char sub2);
+__host__ __device__ float find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt);
+__host__ __device__ char find_char(char c1, char c2, float* w, int is_max);
+__host__ __device__ char find_max_char(char c1, char c2, char sign, float* w);
+__host__ __device__ char find_min_char(char c1, char c2, char sign, float* w);
+__host__ __device__ char find_optimal_char(int is_max, float diff1, char sub1, float diff2, char sub2);
 __host__ __device__ char get_char_by_sign_with_restrictions(char by, char sign, char rest);
 
 __host__ __device__ char get_hash_sign(char c1, char c2);
-__host__ __device__ double get_weight(char sign, double* w);
+__host__ __device__ float get_weight(char sign, float* w);
 
 __host__ __device__ int is_contain(char* str, char c);
 __host__ __device__ int is_conservative(char c1, char c2);

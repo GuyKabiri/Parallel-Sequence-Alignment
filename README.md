@@ -122,12 +122,13 @@ In the given assignment, two sequences `Seq1`, `Seq2`, and a set of weights is p
 
 
 ## Solution
-I initially implemented a basic iterative solution. It is possible to solve the problem sequentially by iterating over the offsets and the letters for each offset. Compare each pair of letters to see if they are equal or if they fall into one of the conservative or semi-conservative groups. If a substitution is possible for a given pair, and the result is higher than that for the original pair, then save the results. Then, for each offset, the best mutation is provided, and the optimal is returned.  
+Initially, a basic iterative solution was implemented. By iterating over the offsets and then for each pair of letters in the offset, the problem can be solved sequentially. Comparing each pair of letters to determine whether they are equal or fall into one of the conservative or semi-conservative groups, then finding their best substitutions (if possible). Hence, save any better substitution found for a pair than the previous one.
 
-Having written the sequential solution, I realized it would be time-wasting to check whether each pair of letters belongs to a conservative or semi-conservative group several times during the run. Although iterations over the groups are non-linear ($O(1) $) (since the number of groups and letters in each group is constant), the groups are given ahead of time, so each evaluation of two letters can be done before the code is run, saving a significant amount of time.  
-Consequently, I created a hashtable of 26 letters and one `-` character (27 X 27). This still takes $ O(1) $ to evaluate each pair, but is significantly faster than the prior approach.  
-In addition, `OpenMP` can be useful for filling this hashtable in such a way that every cell is independent of every other cell.  
-Here is the hashtable (spaces were used instead of `_`):
+Having written the sequential solution, I realized it would be time-wasting to check whether each pair of letters belongs to a conservative or semi-conservative group several times during the run. Despite the fact that iterations over the groups are non-linear ($O(1) $) (since the number of groups and letters in each group is constant), the groups are given ahead of time, so each evaluation of two letters can be done before the program is run, saving significant time.  
+
+Consequently, I created a hashtable of 26 letters and one `-` character (27 X 27). Each pair is still evaluated in $ O(1) $, but this method is much faster than the previous one.  
+Additionally, `OpenMP` can be used for filling this hashtable in such a way that every cell is independent of every other cell.  
+The hashtable (spaces were used instead of `_`) is as follows:
 
 ```
    A B C D E F G H I J K L M N O P Q R S T U V W X Y Z -
@@ -161,9 +162,12 @@ Z |                                                  *
 - |                                                    * 
 ```
 
-Now, a parallel solution is need to be implemented. As this project will run on two machines at the same time, each machine should handle half of the tasks. One machine should be able to download the input data and write the output data to the file, as defined in the project. `MPI` should be used to send the data between machines before initiating the search algorithm. `MPI` provides a simple way to determine the number of processes, so after passing the data between processes, they can calculate how many tasks in total will be handled. A process has its own id, so it can determine which specific tasks it will handle (with consideration for unequal amounts of tasks).
+It is now necessary to implement a parallel solution. As the project will run simultaneously on two machines, each should handle half of the tasks. A single machine should be able to download the input data and write the output data to the file, as specified in the project. The data should be sent between machines using MPI before beginning the search algorithm. Using MPI, one can easily determine the number of processes, so after passing data between processes, one can figure out how many tasks in total will be accomplished. As each process has its own ID, it can determine which specific tasks it will handle (taking into account when dividing the number of tasks unevenly among the number of machines).  
 
+## GPU Implementation
+In the beginning, an implementation similar to that on the CPU was performed. The number of threads created was equal to how many offsets the GPU has to handle. On second thought, that could lead to a failure to utilize all of the GPU's resources, when, for example, there are 3 offsets with each 1000 characters. The GPU will only allocate three threads, although a higher number could have been allocated. CUDA provides a maximum of 1024 threads per block, and 65,535 blocks (in each dimension of the grid), which results in a maximum of 67,107,840 threads per block (in one dimension block case). The project limitation is 10,000 letters for *Seq1* and 5,000 letters for *Seq2*, which adds up to 25,000,000 pairs of letters. The idea of allocating a thread for each letter and offset would be much better. Now, each thread will handle a specific pair of letters at a specific offset. Once the threads have completed evaluating the letters, a large array is displayed, containing an array of mutations for each pair of letters and the original score of the original letters. In order to sum up the array and determine which mutation is optimal, a reduction is required. A reduction of pairs in each offset is necessary, in order to sum the offset's score and the optimal offset's mutation. After that, a second reduction is needed to determine which offset has the best mutation. Instead of linear iteration over the array, the reduction could be implemented in parallel.
 
+## Parallel Reduction
 
 
 
