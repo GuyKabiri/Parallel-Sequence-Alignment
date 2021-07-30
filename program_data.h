@@ -5,7 +5,7 @@
 
 typedef struct _data {
     int is_max;
-    float weights[WEIGHTS_COUNT];
+    double weights[WEIGHTS_COUNT];
     char seq1[SEQ1_MAX_LEN];
     char seq2[SEQ2_MAX_LEN];
 } ProgramData;

@@ -10,11 +10,41 @@
 extern MPI_Datatype mutant_type;
 extern MPI_Datatype program_data_type;
 
+void g()
+{
+    time_t t;
+    FILE* f = fopen("t.txt", "w");
+
+    srand((unsigned) time(&t));
+    int first = rand() % 10000;
+    int second;
+    do {
+        second = rand() % 5000;
+    } while (second >= first);
+    int count = 0;
+    char c;
+    while (count< first)
+    {
+        c = FIRST_CHAR + rand() % NUM_CHARS;
+        fprintf(f, "%c", c);
+        count++;
+    }
+    fprintf(f, "\n");
+    count=0;
+    while (count< second)
+    {
+        c = FIRST_CHAR + rand() % NUM_CHARS;
+        fprintf(f, "%c", c);
+        count++;
+    }
+    fclose(f);
+}
+
 int main(int argc, char* argv[])
 {
     int  pid;			//	rank of process
 	int  num_processes;     //	number of processes
-    float time = MPI_Wtime();
+    double time = MPI_Wtime();
     
     MPI_Init(&argc, &argv);	//	start MPI
     MPI_Comm_rank(MPI_COMM_WORLD, &pid);		//	get process rank
