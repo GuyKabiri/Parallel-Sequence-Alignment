@@ -238,7 +238,6 @@ double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt)
 
         mutant_diff = get_weight(get_hashtable_sign(c1, sub), data->weights) - pair_score;    //  difference between original and mutation weights
 
-
         if ((data->is_max && mutant_diff > best_mutant_diff) || 
             (!data->is_max && mutant_diff < best_mutant_diff))
         {

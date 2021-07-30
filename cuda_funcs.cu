@@ -423,20 +423,11 @@ __host__ __device__ char get_optimal_substitute(int is_max, double diff1, char s
             return sub1;
 
     //  diff1 is not better than diff2, or first substitue is not possible
-    //  therefore examination if diff2 is better than 0 is necessary
-    if ((is_max && diff2 > 0) || (!is_max && diff2 < 0))
-    {
-        //  if second substitue is possible, return it
-        if (sub2 != NOT_FOUND_CHAR)
-            return sub2;
+    //  therefore, check if diff2 is possible, if not return diff1 even if it is not possible (NOT_FOUND_CHAR)
+    if (sub2 != NOT_FOUND_CHAR)
+        return sub2;
 
-        //  second subtitue is not possible, but the first one might be better than nothing
-        if ((is_max && diff1 > 0) || (!is_max && diff1 < 0))
-            if (sub1 != NOT_FOUND_CHAR)
-                return sub1;
-    }
-
-    return NOT_FOUND_CHAR;  //  could not find any substitution
+    return sub1;
 }
 
 __host__ __device__ char get_substitute_by_sign_with_restrictions(char by, char sign, char rest)
