@@ -184,6 +184,9 @@ In order to perform reduction over array with $ n $ elemnts, $ n $ must be a pow
 ![](https://miro.medium.com/max/875/1*l1uoTZpQUW8YaSjFpcMNlw.png)
 As can see above, array size is $ 16 $, therefore `stride` will be $ 8 $, and the amount of iterations is $ log(16) = 4 $.
 
+### Squeezing
+When the array size ($ n $) is not a power of 2, reducing it is required. One need to find the next number ($ m $) which is a power of 2 and smaller than $ n $. Then, the other items in the array need to be reduced to index $ m $. In the worst case, the squeezing will perform over $ n / 2 - 1 $ elements
+
 
 ## How To Run
 The project was developed using `MPI`, `OpenMP`, and `CUDA`. Therefore, all of those library had to be installed for the project to run.  

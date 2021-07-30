@@ -228,26 +228,26 @@ __global__ void max_reduction_offsets(double* scores, Mutant_GPU* mutants, int i
 
     int last_block_num_threads = num_offsets - blockDim.x * (gridDim.x - 1);
 
-    if (blockIdx.x == gridDim.x - 1 && is_power2(last_block_num_threads))
-    {
-        int last_block_pow2 = floor_highest_power_of2(last_block_num_threads);
+    // if (blockIdx.x == gridDim.x - 1 && is_power2(last_block_num_threads))
+    // {
+    //     int last_block_pow2 = floor_highest_power_of2(last_block_num_threads);
 
-        if (threadIdx.x == last_block_pow2 - 1)   //  last thread that its ID is power of 2
-        {
-            int other_global_idx;
-            __syncthreads();
-            for (int i = 1; i <= last_block_num_threads - last_block_pow2; i++)
-            {
-                other_global_idx = idx_global + i * char_pow2;
+    //     if (threadIdx.x == last_block_pow2 - 1)   //  last thread that its ID is power of 2
+    //     {
+    //         int other_global_idx;
+    //         __syncthreads();
+    //         for (int i = 1; i <= last_block_num_threads - last_block_pow2; i++)
+    //         {
+    //             other_global_idx = idx_global + i * char_pow2;
 
-                if (is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max))
-                {
-                    scores[idx_global] = scores[other_global_idx];
-                    mutants[idx_global] = mutants[other_global_idx];
-                }
-            }
-        }
-    }
+    //             if (is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max))
+    //             {
+    //                 scores[idx_global] = scores[other_global_idx];
+    //                 mutants[idx_global] = mutants[other_global_idx];
+    //             }
+    //         }
+    //     }
+    // }
 
     __syncthreads();
     for (int i = offset_pow2 / 2; i > 0; i /= 2)
