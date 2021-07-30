@@ -79,8 +79,6 @@ void initiate_program(int pid, int num_processes)
             cpu_first_offset,
             cpu_last_offset);
 
-    // float gpu_best_score = data.is_max ? INT_MIN : INT_MAX;
-    // float cpu_best_score = data.is_max ? INT_MIN : INT_MAX;
     float gpu_best_score = data.is_max ? -INFINITY : INFINITY;
     float cpu_best_score = data.is_max ? -INFINITY : INFINITY;
     Mutant gpu_mutant = { -1, -1, NOT_FOUND_CHAR };
@@ -179,11 +177,9 @@ float find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, in
     fill_hash(data->weights, pid);
     
     //  global variable for the best score among all threads
-    // float gloabl_score = data->is_max ? INT_MIN : INT_MAX;
     float gloabl_score = data->is_max ? -INFINITY : INFINITY;
 #pragma omp parallel
 {
-    // float _best_score = data->is_max ? INT_MIN : INT_MAX;      //  private variable for thread's best score
     float _best_score = data->is_max ? -INFINITY : INFINITY;      //  private variable for thread's best score
 
     float _curr_score;          //  private variable for thread's specific offset score

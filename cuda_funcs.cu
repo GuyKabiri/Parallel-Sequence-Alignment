@@ -11,28 +11,20 @@ float gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first_
     // Allocate memory on GPU to copy the data from the host
     ProgramData* gpu_data;
     Mutant_GPU* gpu_mutant;
+    // int* offset_scores;
     float* scores;
-    // float returned_score = cpu_data->is_max ? INT_MIN : INT_MAX;
     float returned_score = cpu_data->is_max ? -INFINITY : INFINITY;
 
 
     int offsets = last_offset - first_offset;
     int chars = my_strlen(cpu_data->seq2);
-    int array_size = chars * offsets;
 
-    int threadsPerBlock = 64;    //////////////////////////////////////////////s/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    int best = array_size % threadsPerBlock;
-    for (int i = threadsPerBlock; i <= BLOCK_MAX_SIZE; i *= 2)
-    {
-        if (array_size % i < best)
-        {
-            best = array_size % i;
-            threadsPerBlock = i;
-        }
-    }
+    int threadsPerBlock = floor_highest_power_of2(chars);
+    if (threadsPerBlock > MAX_BLOCK_SIZE)
+        threadsPerBlock = MAX_BLOCK_SIZE;
 
-    threadsPerBlock = 256;
-    int blocksPerGrid = (array_size + threadsPerBlock - 1) / threadsPerBlock;
+    int array_size = threadsPerBlock * offsets;
+    int blocksPerGrid = offsets; //(array_size + threadsPerBlock - 1) / threadsPerBlock;
 
     printf("threads=%d, blocks=%d, array size=%d, bytes=%lu\n", threadsPerBlock, blocksPerGrid, array_size, (sizeof(Mutant_GPU) + sizeof(float)) * array_size);
 
@@ -77,7 +69,6 @@ float gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first_
         fprintf(stderr, "Failed to launch vectorAdd kernel for hashtable filling -  %s\n", cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
-    cudaDeviceSynchronize();
 
     // Launch the Kernel
     // printf("blocks=%d, threads=%d\n", blocksPerGrid, threadsPerBlock);
@@ -89,27 +80,19 @@ float gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first_
         exit(EXIT_FAILURE);
     }
 
-
-
-    cudaDeviceSynchronize();
-    // printf("---------------------------(((((((((((((((((((((()))))))))))))))))))))))))))))))-------------------------\n");
     max_reduction_chars2<<<blocksPerGrid, threadsPerBlock>>>(scores, gpu_mutant, cpu_data->is_max, offsets, chars);
     // max_reduction<<<1, threadsPerBlock>>>(scores, gpu_mutant, array_size, cpu_data->is_max, offsets, chars, FALSE);
-    cudaDeviceSynchronize();
 
-
-    threadsPerBlock = 64;    //////////////////////////////////////////////s/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    best = offsets % threadsPerBlock;
-    for (int i = threadsPerBlock; i <= BLOCK_MAX_SIZE; i *= 2)
-    {
-        if (offsets % i < best)
-        {
-            best = offsets % i;
-            threadsPerBlock = i;
-        }
-    }
     
+    threadsPerBlock = floor_highest_power_of2(offsets);
+    printf("%d , %d    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n",offsets, threadsPerBlock);
+    if (threadsPerBlock > MAX_BLOCK_SIZE)
+        threadsPerBlock = MAX_BLOCK_SIZE;
+    
+
     blocksPerGrid = (offsets + threadsPerBlock - 1) / threadsPerBlock;
+    printf("offsets threads=%d, blocks=%d\n", threadsPerBlock, blocksPerGrid);
+
     max_reduction_offsets2<<<blocksPerGrid, threadsPerBlock>>>(scores, gpu_mutant, cpu_data->is_max, offsets, chars);
 
     //  the best mutant is in index 0 in mutants array
@@ -150,9 +133,7 @@ float gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first_
     }
 
     if (returned_mutant->ch == NOT_FOUND_CHAR)
-        // return cpu_data->is_max ? INT_MIN : INT_MAX;
         return cpu_data->is_max ? -INFINITY : INFINITY;
-
 
     return returned_score;
 }
@@ -161,46 +142,68 @@ __global__ void find_best_mutant_gpu(ProgramData* data, Mutant_GPU* mutants, flo
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;        //  calculate thread index in the arrays
 
-    if (idx >= offsets * chars)
+    if (idx >= offsets * blockDim.x)
         return;
 
-    int t_offset = start_offset + idx / chars;
-    int t_char_offset = idx % chars;
+    scores[idx] = 0;
+    mutants[idx].mutant.ch = NOT_FOUND_CHAR;
+    mutants[idx].mutant.offset = -1;
+    mutants[idx].mutant.char_offset = -1;
+    mutants[idx].diff = data->is_max ? -INFINITY : INFINITY;
 
-    int idx1 = t_offset + t_char_offset;
-    int idx2 = t_char_offset;
+    int thrd_offset = blockIdx.x + start_offset;
+    int thrd_charoffset;
+    int iterations_per_thrd = my_ceil((double)chars / (double)blockDim.x);
 
-    char c1 = data->seq1[idx1];
-    char c2 = data->seq2[idx2];
+    float _pair_score;
+    Mutant_GPU temp_mutant;
+    int idx1, idx2;
+    char c1, c2;
+    for (int i = 0; i < iterations_per_thrd; i++)
+    {
+        thrd_charoffset = threadIdx.x + i * blockDim.x;
 
-    scores[idx] = get_weight(get_hash_sign(c1, c2), data->weights);
-    char sub = find_char(c1, c2, data->weights, data->is_max);
+        if (thrd_charoffset >= chars)   //  this thread does not have more tasks
+            break;
 
-    mutants[idx].mutant.ch = find_char(c1, c2, data->weights, data->is_max);
-    mutants[idx].mutant.char_offset = t_char_offset;
-    mutants[idx].mutant.offset = t_offset;
+        idx1 = thrd_offset + thrd_charoffset;
+        idx2 = thrd_charoffset;
 
-    if (mutants[idx].mutant.ch == NOT_FOUND_CHAR)
-        // mutants[idx].diff = data->is_max ? INT_MIN : INT_MAX;
-        mutants[idx].diff = data->is_max ? -INFINITY : INFINITY;
+        c1 = data->seq1[idx1];
+        c2 = data->seq2[idx2];
 
-    else
-        mutants[idx].diff = get_weight(get_hash_sign(c1, sub), data->weights) - scores[idx];
+        _pair_score = get_weight(get_hash_sign(c1, c2), data->weights);
+        scores[idx] += _pair_score;
 
-    // printf("%3d, offset=%3d, char=%3d, c1=%c, c2=%c, sign=%c, score=%g, diff=%g\n",
-    // idx,
-    //         mutants[idx].mutant.offset,
-    //         mutants[idx].mutant.char_offset,
-    //         c1, c2, sub,
-    //         scores[idx],
-    //         mutants[idx].diff);
+        temp_mutant.mutant.ch = find_char(c1, c2, data->weights, data->is_max);
+        temp_mutant.mutant.offset = thrd_offset;
+        temp_mutant.mutant.char_offset = thrd_charoffset;
+        if (temp_mutant.mutant.ch == NOT_FOUND_CHAR)
+            temp_mutant.diff = data->is_max ? -INFINITY : INFINITY;
+        else
+            temp_mutant.diff = get_weight(get_hash_sign(c1, temp_mutant.mutant.ch), data->weights) - _pair_score;
 
-    // printf("%2d, c1=%c, c2=%c, s=(%c), score=%f, %f\n", idx, c1, c2, mutants[idx].mutant.ch, scores[idx], mutants[idx].diff);
+        // printf("%d, %d, %d, id=%3d, off=%3d, char=%3d, c1=%c, c2=%c, s=%c, score=%f, diff=%f\n",
+        //         chars, blockDim.x, iterations_per_thrd,
+        //         idx,
+        //         thrd_offset, 
+        //         thrd_charoffset, 
+        //         c1, c2,
+        //         temp_mutant.mutant.ch,
+        //         _pair_score, 
+        //         temp_mutant.diff);
 
-    //  each thread holds a mutant for specifict pair in a specific offset
-    //  reduction is needed now to sum the offset total score
-    //  and to decide which mutant is the most optimal in each offset
-    //  later, another reduction is needed to find max of all offsets  
+        if (i == 0 || is_swapable(&mutants[idx], &temp_mutant, 0, 0, data->is_max))
+            mutants[idx] = temp_mutant;   
+    }
+
+    // printf("id=%3d, off=%3d, char=%3d, s=%c, score=%f, diff=%f\n",
+    //             idx,
+    //             mutants[idx].mutant.offset, 
+    //             mutants[idx].mutant.char_offset, 
+    //             mutants[idx].mutant.ch,
+    //             scores[idx], 
+    //             mutants[idx].diff);
 }
 
 
@@ -209,59 +212,43 @@ __global__ void max_reduction_chars2(float* scores, Mutant_GPU* mutants, int is_
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-    int array_size = num_offsets * num_chars;
+    int array_size = num_offsets * blockDim.x;
     if (idx >= array_size)
         return;
 
     int char_pow2 = floor_highest_power_of2(num_chars);
 
-    if (num_chars != char_pow2)
-    {
-        if (idx % num_chars >= char_pow2)
-            return;
-
-        if (idx % num_chars == char_pow2 - 1)   //  the last thread in each offset that is a power of 2
-        {
-            for (int i = 1; i < num_chars - char_pow2 + 1; i++)
-            {
-                int _idx = idx + i;
-                // printf("idxs=%3d, %3d, score=%g, %g, %g swap? %s\n",
-                //         idx, 
-                //         _idx, 
-                //         scores[idx], 
-                //         scores[_idx],
-                //         scores[idx]+ scores[_idx],
-                //         is_swapable(NULL, mutants, idx, _idx, is_max, TRUE)?"true":"false");
-                scores[idx] += scores[_idx];     //  aggregate the rest of threads' scores
-                if (is_swapable(NULL, mutants, idx, _idx, is_max, TRUE)) //  if the rest of the threads has better mutant than the current
-                    mutants[idx] = mutants[_idx];
-            }
-        }
-    }
-
     __syncthreads();
-    for (int i = char_pow2 / 2; i > 0; i /= 2)
+    for (int i = blockDim.x / 2; i > 0; i /= 2)
     {
-        if (idx % num_chars < i)
+        // if (idx % char_pow2 < i)
+        if (idx % blockDim.x  < i)
         {
             int _idx = idx + i;
 
-                // printf("%3d, %3d, score=%g, %g, %g diff=%g, %g swap? %s\n",
-                //         idx, 
-                //         _idx, 
-                //         scores[idx], 
-                //         scores[_idx],
-                //         scores[idx]+ scores[_idx],
-                //         mutants[idx].diff,
-                //         mutants[_idx].diff,
-                //         is_swapable(NULL, mutants, idx, _idx, is_max, TRUE)?"true":"false");
+            // printf("%3d, %3d, score=%g, %g, %g diff=%g, %g swap? %s\n",
+            //         idx, 
+            //         _idx, 
+            //         scores[idx], 
+            //         scores[_idx],
+            //         scores[idx]+ scores[_idx],
+            //         mutants[idx].diff,
+            //         mutants[_idx].diff,
+            //         is_swapable(&mutants[idx], &mutants[_idx], 0, 0, is_max)?"true":"false");
 
             scores[idx] += scores[_idx];
-            if (is_swapable(NULL, mutants, idx, _idx, is_max, TRUE))
+            if (is_swapable(&mutants[idx], &mutants[_idx], 0, 0, is_max))
                 mutants[idx] = mutants[_idx];
         }
         __syncthreads();
     }
+    
+    // if (threadIdx.x == 0)
+    //     printf("----------------******************** %3d off=%3d, score=%g, diff=%g\n", 
+    //             idx,
+    //             mutants[idx].mutant.offset,
+    //             scores[idx], 
+    //             mutants[idx].diff);
 }
 
 __global__ void max_reduction_offsets2(float* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars)
@@ -271,33 +258,57 @@ __global__ void max_reduction_offsets2(float* scores, Mutant_GPU* mutants, int i
     if (tidx >= num_offsets)
         return;
 
-    int idx_global = tidx * num_chars;
+    // printf("++++++++++++ %d offsets=%d ++++++++++++++++\n", tidx, num_offsets);
 
-    // printf("++++++++++++++++ %3d %g\n", idx_global, mutants[idx_global].mutant.ch != NOT_FOUND_CHAR? scores[idx_global] + mutants[idx_global].diff:scores[idx_global]);
+    int char_pow2 = floor_highest_power_of2(num_chars);     //  char_pow2 is the previous block size
+    if (char_pow2 > MAX_BLOCK_SIZE)
+        char_pow2 = MAX_BLOCK_SIZE;
+
+    int idx_global = tidx * char_pow2;  //  id for the global arrays
+
+    // printf("++++++++++++++++ id=%3d, offset=%3d, %g %g\n", 
+    //         idx_global, 
+    //         mutants[idx_global].mutant.offset,
+    //         scores[idx_global],  
+    //         mutants[idx_global].diff);
 
     int offset_pow2 = floor_highest_power_of2(num_offsets);
+    if (offset_pow2 > MAX_BLOCK_SIZE)
+        offset_pow2 = MAX_BLOCK_SIZE;
 
+    int runabble = offset_pow2;
 
-    if (num_offsets != offset_pow2)
+    if (blockIdx.x == gridDim.x - 1 && num_offsets != offset_pow2)
     {
-        if (tidx % num_offsets >= offset_pow2)
-            return;
+        // if (tidx % num_offsets >= offset_pow2)                      ////////////////////////////////////////////////////////////////////////  
+        // if (threadIdx.x >= offset_pow2)                      ////////////////////////////////////////////////////////////////////////    
+        // {
+        //     printf("bye %d\n", tidx);
+        //     return;
+        // }
+        int last_block_num_threads = num_offsets - offset_pow2;
+        runabble = floor_highest_power_of2(last_block_num_threads);
 
-        if (tidx % num_offsets == offset_pow2 - 1)   //  last thread that its ID is power of 2
+        if (threadIdx.x == runabble - 1)   //  last thread that its ID is power of 2
         {
+            __syncthreads();
             // int i = 1; i < num_chars - char_pow2 + 1
-            for (int i = offset_pow2; i < num_offsets; i++)
+            for (int i = 1; i < last_block_num_threads - runabble + 1; i++)
             {
-                int other_global_idx = i * num_chars;
+                int other_global_idx = idx_global + i * char_pow2;
 
-                // printf("%3d, %3d, score=%g, %g\n",
+                // printf("in id=%2d,  glob id=%3d, %3d, score=%g, %g | %g %g swap? (%d)\n",
+                //         threadIdx.x,
                 //         idx_global, 
                 //         other_global_idx, 
 
                 //         scores[idx_global], 
-                //         scores[other_global_idx]);
+                //         mutants[idx_global].diff,
+                //         scores[other_global_idx],
+                //         mutants[other_global_idx].diff,
+                //         is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max));
 
-                if (is_swapable(scores, mutants, idx_global, other_global_idx, is_max, FALSE))
+                if (is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max))
                 {
                     scores[idx_global] = scores[other_global_idx];
                     mutants[idx_global] = mutants[other_global_idx];
@@ -309,20 +320,27 @@ __global__ void max_reduction_offsets2(float* scores, Mutant_GPU* mutants, int i
     __syncthreads();
     for (int i = offset_pow2 / 2; i > 0; i /= 2)
     {
-        if (tidx < i)
+        if (threadIdx.x < i)
         {
-            int other_global_idx = idx_global + i * num_chars;
+            int other_global_idx = idx_global + i * char_pow2;
+            // printf("%4d, %4d\n", idx_global, other_global_idx);
 
 
-            // printf("%3d, %3d, score=%g, %g -> swap? %s\n",
+            // printf("in= %3d, %3d, global=%3d, %3d, offsets=%3d %3d, score=%g, %g | %g %g swap? (%d) block=%d\n",
+            //             tidx, tidx + i,
             //             idx_global, 
             //             other_global_idx, 
-
+            //             mutants[idx_global].mutant.offset,
+            //             mutants[other_global_idx].mutant.offset,
             //             scores[idx_global], 
-            //             scores[other_global_idx], 
-            //             is_swapable(scores, mutants, idx_global, other_global_idx, is_max, FALSE) ? "true":"false");
+            //             mutants[idx_global].diff,
+            //             scores[other_global_idx],
+            //             mutants[other_global_idx].diff,
+            //             is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max),
+            //             blockIdx.x);
 
-            if (is_swapable(scores, mutants, idx_global, other_global_idx, is_max, FALSE))
+            if (other_global_idx < num_offsets * char_pow2)
+            if (is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max))
             {
                 scores[idx_global] = scores[other_global_idx];
                 mutants[idx_global] = mutants[other_global_idx];
@@ -337,152 +355,42 @@ __global__ void max_reduction_offsets2(float* scores, Mutant_GPU* mutants, int i
     }
     // printf("%3d -> %g\n", idx_global, scores[idx_global]);
 
-    if (tidx == 0 && mutants[0].mutant.ch != NOT_FOUND_CHAR)
-        scores[0] += mutants[0].diff;
+    // if (tidx == 0 && mutants[0].mutant.ch != NOT_FOUND_CHAR)
+    //     scores[0] += mutants[0].diff;
+
+
+
+
+
+
+    // if (tidx == 0)
+    //     scores[0] += mutants[0].diff;
+
+    // if (tidx % blockDim.x == 0)
+    //     printf("))))))))))))))))))))&&&&&&&&&&&&&&&&&&&& tid=%3d, score=%g diff=%g total=%g offset=%d pos=%d\n",
+    //             tidx, scores[idx_global], mutants[idx_global].diff, scores[idx_global] + mutants[idx_global].diff, mutants[idx_global].mutant.offset, mutants[idx_global].mutant.char_offset);
+
+    if (tidx == 0)
+        scores[0] = index_best_mutant(scores, mutants, is_max, blockDim.x, char_pow2);
 }
 
-
-__global__ void max_reduction_chars(float* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars)
+__device__ float index_best_mutant(float* scores, Mutant_GPU* mutants, int is_max, int offsets_block_size, int chars_block_size)
 {
-    int idx = blockDim.x * blockIdx.x + threadIdx.x;        //  calculate thread index in the arrays
+    Mutant_GPU best_mutant = mutants[0];
+    float best_score = scores[0];
+    int idx;
 
-    int array_size = offsets * chars;
-    if (idx >= array_size)
-        return;
-
-    int t_offset = idx / chars;
-    int t_charoffset = idx % chars;     //  thread's char offset
-
-    //  if the array amount of chars is not a power of 2, an aggregate from the last chars
-    //  should applied to the highest power of 2
-
-    int chars_pow2 = floor_highest_power_of2(chars);
-
-    if (chars_pow2 != chars)
+    for (int i = 1; i < gridDim.x; i++)
     {
-        if (t_charoffset >= chars_pow2)
-            return;     //  these threads are usless here
-
-        if (t_charoffset == chars_pow2 - 1) //  the new last thread will aggregate the rest of threads
+        idx = i * offsets_block_size * chars_block_size;
+        if (is_swapable(&best_mutant, &mutants[idx], best_score, scores[idx], is_max))
         {
-            for (int i = chars_pow2; i < chars; i++)
-            {
-                int index = i + chars * t_offset;
-#ifdef PRINT_DEBUG_CUDA_CHARS
-                // printf("%3d <- %3d    real= %3d <- %3d chars\n", idx, index, (mutants[idx].mutant.offset +1) * (mutants[idx].mutant.char_offset+1) -1, (mutants[index].mutant.offset+1) * (mutants[index].mutant.char_offset+1) -1);
-
-                printf("%3d <- %3d | (%2d %2d) (%2d %2d) | %3d <- %3d chars\n",
-                        idx,
-                        index,
-                        mutants[idx].mutant.offset,
-                        mutants[idx].mutant.char_offset,
-                        mutants[index].mutant.offset,
-                        mutants[index].mutant.char_offset,
-                        (mutants[idx].mutant.offset+1) * (mutants[idx].mutant.char_offset+1)-1,
-                        (mutants[index].mutant.offset+1) * (mutants[index].mutant.char_offset+1)-1);
-
-#endif
-                scores[idx] += scores[index];       //  aggregate the scores of the rest of array
-
-                if (is_swapable(NULL, mutants, idx, index, is_max, TRUE))
-                    mutants[idx] = mutants[index];
-            }
+            best_mutant = mutants[idx];
+            best_score = scores[idx];
         }
     }
 
-
-    //  here, each threads has offset of Seq1 and char offset of a pair in Seq1 and Seq2,
-    //  the amount of characters here is a power of 2 and can be reduct
-    //  the reduction will perform between all the char in each offsets
-    //  which would lead eventually that the thread with the char offset of 0
-    //  in each offset will save the optimal mutant of this offset, and the total score of
-    //  this offset (without the mutation)
-    //  in global terms index=(i * chars) will hold the above (where i from 0 to offsets-1)
-
-    for (int size = chars_pow2 / 2; size > 0; size /= 2)
-    {
-        if (t_charoffset >= size)
-            break;
-
-        int index = idx + size;
-
-#ifdef PRINT_DEBUG_CUDA_CHARS
-        printf("%3d Vs %3d    %f, %f chars\n", idx, index, scores[idx], scores[index]);
-#endif
-        scores[idx] += scores[index];
-
-        if (is_swapable(NULL, mutants, idx, index, is_max, TRUE))
-            mutants[idx] = mutants[index];
-
-        __syncthreads();
-    }
-}
-
-__global__ void max_reduction_offsets(float* scores, Mutant_GPU* mutants, int is_max, int offsets, int chars)
-{
-    int idx = blockDim.x * blockIdx.x + threadIdx.x;        //  calculate thread index in the arrays
-
-    if (idx >= offsets)
-        return;
-
-    int global_idx = idx * chars;
-
-    //  here amount off threads equals to amount of offsets
-    //  each thread should look at the global index of array idx * chars
-
-    int offsets_pow2 = floor_highest_power_of2(offsets);
-
-    if (offsets_pow2 != offsets)
-    {
-        if (idx >= offsets_pow2)
-            return;
-        
-        if (idx == offsets_pow2 - 1)
-        {
-            for (int i = offsets_pow2; i < offsets; i++)
-            {
-                int index = i * chars;
-
-                float my_total = scores[global_idx] + mutants[global_idx].diff;
-                float other_total = scores[index] + mutants[index].diff;
-
-#ifdef PRINT_DEBUG_CUDA_OFFSETS
-                printf("%3d) %3d <- %3d    %f, %f offsets=%d, pow=%d\n", idx, mutants[global_idx].mutant.offset, mutants[index].mutant.offset, my_total, other_total, offsets,offsets_pow2);
-#endif
-
-                if (is_swapable(scores, mutants, global_idx, index, is_max, FALSE))
-                {
-                    mutants[global_idx] = mutants[index];
-                    scores[global_idx] = scores[index];
-                }
-            }
-        }
-    }
-
-    for (int size = offsets_pow2 / 2; size > 0; size /= 2)
-    {
-        int index = global_idx + size * chars;
-        if (idx >= size)
-            break;
-
-
-        float my_total = scores[global_idx] + mutants[global_idx].diff;
-        float other_total = scores[index] + mutants[index].diff;
-
-#ifdef PRINT_DEBUG_CUDA_OFFSETS
-        printf("%3d) %3d Vs %3d    %f, %f offsets\n", idx, mutants[global_idx].mutant.offset, mutants[index].mutant.offset, my_total, other_total);
-#endif
-
-        if (is_swapable(scores, mutants, global_idx, index, is_max, FALSE))
-        {
-            mutants[global_idx] = mutants[index];
-            scores[global_idx] = scores[index];
-        }
-        __syncthreads();
-    }
-
-    if (idx == 0)
-        scores[0] += mutants[idx].diff;
+    return best_score + best_mutant.diff;
 }
 
 
@@ -511,31 +419,22 @@ __host__ __device__ int ceil_highest_power_of2(int n)
     return 0;
 }
 
-__device__ int is_swapable(float* scores, Mutant_GPU* mutants, int idx1, int idx2, int is_max, int diff_only)
+__device__ int is_swapable(Mutant_GPU* m1, Mutant_GPU* m2, float s1, float s2, int is_max)
 {
-    if (mutants[idx1].mutant.ch == NOT_FOUND_CHAR)
-        return TRUE;
-
-    float total1 = mutants[idx1].diff;
-    float total2 = mutants[idx2].diff;
-
-    if (!diff_only)
-    {
-        total1 += scores[idx1];
-        total2 += scores[idx2];
-    }
+    float total1 = m1->diff + s1;
+    float total2 = m2->diff + s2;
 
     if ((is_max && total2 > total1) || (!is_max && total2 < total1))
         return TRUE;
 
-    if (total1 == total2)
+    if (total2 == total1)
     {
-        if (mutants[idx2].mutant.offset < mutants[idx1].mutant.offset)
+        if (m2->mutant.offset < m1->mutant.offset)
             return TRUE;
 
-        if (mutants[idx2].mutant.offset == mutants[idx1].mutant.offset)
+        if (m2->mutant.offset == m1->mutant.offset)
         {
-            if (mutants[idx2].mutant.char_offset < mutants[idx1].mutant.char_offset)
+            if (m2->mutant.char_offset < m1->mutant.char_offset)
                 return TRUE;
         }
     }
@@ -591,7 +490,6 @@ __host__ __device__ float find_best_mutant_offset(ProgramData* data, int offset,
     int idx1, idx2;
     float total_score = 0;
     float pair_score, mutant_diff;
-    // float best_mutant_diff = data->is_max ? INT_MIN : INT_MAX;
     float best_mutant_diff = data->is_max ? -INFINITY : INFINITY;
 
     int iterations = my_strlen(data->seq2);
@@ -840,6 +738,14 @@ __host__ __device__ int my_strlen(char* str)
         ++t;
     }
     return count;
+}
+
+__device__ int my_ceil(double num)
+{
+    int inum = (int)num;
+    if (num == (double)inum)
+        return inum;
+    return inum + 1;
 }
 
 __global__ void fill_hashtable_gpu()

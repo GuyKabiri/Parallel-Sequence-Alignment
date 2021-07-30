@@ -194,3 +194,4 @@ where `{EXECUTABLE}` is the name of the executable file, and `{GPU}` is a number
 # Difficulties:
 *  MPI Datatypes
 *  Cuda blocks
+*  Parallel reduction - syncing all threads in grid
