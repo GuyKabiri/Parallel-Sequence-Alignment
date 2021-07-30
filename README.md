@@ -172,13 +172,17 @@ In order to sum up the array and determine which mutation is optimal, a reductio
 While investigating the parallel reduce algorithm, I realized that the mutations for a given offset will often end up in different thread blocks when the given input has a letter sequence that exceeds 1,024 letters. Because CUDA does not support over-grid thread synchronization, but only per block, it will be very difficult to implement the reduced algorithm. Several ways of handling this situation are suggested over the internet, such as using `counter lock`, which acts like a barrier, or CUDA's `cooperative-groups`, which allows threads to synchronize over the whole group.  
 Time constraints forced me to take another route. Finally, it was decided to generate the number of blocks as the number of offsets, so that if there are more than 1,024 pairs of letters in each offset, some threads will have to calculate a mutation up to 5 times (in case there are 5,000 pairs of letters). A second problem is that the reduction algorithm only works with a power of 2 amount of threads. If the amount of letters or offsets is not a power of 2, squeezing is necessary before performing a reduction. Finally, for the pair evaluation, the highest power of 2 number equals to or less than the number of letters will be the block dimension. In this way, one can reduce the pairs without having to squeeze them. For the offsets, a squeezing is necessary before performing the reduction.
 
-
-
-
-
 ## Parallel Reduction
 
+Parallel reduction refers to algorithms which combine an array of elements producing a single value as a result. Problems eligible for this algorithm include those which involve operators that are associative and commutative in nature. Some of them include:
+*  Sum of an array.
+*  Minimum/Maximum of an array.
 
+Assuming one have an array of $ n $ values with $ n $ threads, the reduction algorithm provides a solution with $ log(n) $.
+In order to perform reduction over array with $ n $ elemnts, $ n $ must be a power of 2 ($ 2^i $), if not a squeez have to be perform on the array in order to reduce the array size to be power of 2 (will discribed later). At the beginning of the algorithm, a `stride` constant with the size of $ n /_ 2 $ is defined. In each iteration of the algorithm, every cell performing the reduce operation between itself ($ i $) and $ i + stide $. At the end of each iteration, one need to devide `stride` by 2.
+
+![](https://miro.medium.com/max/875/1*l1uoTZpQUW8YaSjFpcMNlw.png)
+As can see above, array size is $ 16 $, therefore `stride` will be $ 8 $, and the amount of iterations is $ log(16) = 4 $.
 
 
 ## How To Run
