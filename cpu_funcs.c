@@ -154,11 +154,13 @@ void initiate_program(int pid, int num_processes)
 			exit(1);
     	}
     	fclose(out_file);
-        
+
+#ifndef EVALUATION_MODE
         if (cpu_tasks == 0) //  if the root CPU did not had any tasks, it's hashtable is empty, therefore, it will fill it now for printing
             fill_hash(data.weights, pid);
 
         pretty_print(&data, mut, final_best_mutant.offset, final_best_mutant.char_offset);
+#endif
     }
 }
 

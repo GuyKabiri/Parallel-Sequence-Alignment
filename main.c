@@ -44,13 +44,13 @@ int main(int argc, char* argv[])
 {
     int  pid;			//	rank of process
 	int  num_processes;     //	number of processes
-    double time = MPI_Wtime();
+    double time = 0;
     
     MPI_Init(&argc, &argv);	//	start MPI
     MPI_Comm_rank(MPI_COMM_WORLD, &pid);		//	get process rank
 	MPI_Comm_size(MPI_COMM_WORLD, &num_processes);	//	get number of processes
     
-    /* create a type for data struct */
+    //  create mpi datatypes
     program_data_type_initiate();
     mutant_type_initiate();
 
@@ -74,18 +74,17 @@ int main(int argc, char* argv[])
     if (num_processes == 1)
         omp_set_num_threads(1);
     else
-        // omp_set_num_threads(MAX_THREADS / num_processes);
         omp_set_num_threads(4);
 
-    // time -= MPI_Wtime();    //  substract the mpi initiation time
+    time -= MPI_Wtime();    //  substract the mpi initiation time
     initiate_program(pid, num_processes);
-    // time += MPI_Wtime();    //  get program time
-    time = MPI_Wtime() - time;    //  get program time
+    time += MPI_Wtime();    //  get program time
 
     if (pid == ROOT)
         printf("total time: %g\n", time);
 
-    mpi_free_type(&program_data_type);
+    //  free mpi's datatypes
+    mpi_free_type(&program_data_type);  
     mpi_free_type(&mutant_type);
 
 	MPI_Finalize();

@@ -42,6 +42,8 @@
 #define MAXIMUM_FUNC 1
 #define MINIMUM_FUNC 0
 
+#define EVALUATION_MODE
+
 typedef unsigned int uint;
 
 #endif // __DEF_H__
