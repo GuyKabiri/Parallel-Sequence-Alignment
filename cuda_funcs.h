@@ -38,9 +38,8 @@ __global__ void max_reduction_chars(double* scores, Mutant_GPU* mutants, int is_
 __global__ void max_reduction_offsets(double* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars);
 __global__ void fill_hashtable_gpu();
 
-__device__ int my_ceil(double num);
-__device__ int is_swapable(Mutant_GPU* m1, Mutant_GPU* m2, double s1, double s2, int is_max);
 __device__ double reduce_last_results(double* scores, Mutant_GPU* mutants, int is_max, int stride);
+__device__ int my_ceil(double num);
 
 __host__ __device__ char get_substitute(char c1, char c2, double* w, int is_max);
 __host__ __device__ char get_max_substitute(char c1, char c2, char sign, double* w);
@@ -54,11 +53,12 @@ __host__ __device__ int is_contain(char* str, char c);
 __host__ __device__ int is_conservative(char c1, char c2);
 __host__ __device__ int is_semi_conservative(char c1, char c2);
 __host__ __device__ char get_pair_sign(char a, char b);
+__host__ __device__ int is_swapable(Mutant* m1, Mutant* m2, double score1, double score2, int is_max);
 
 __host__ __device__ int floor_highest_power_of2(int n);
 __host__ __device__ int ceil_highest_power_of2(int n);
 __host__ __device__ int is_power2(int n);
-__host__ __device__ int my_strlen(char* str);
+__host__ __device__ int strlen_gpu(char* str);
 
 
 #endif //   __CUDA_FUNCS_H__

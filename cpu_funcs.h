@@ -5,6 +5,7 @@
 #include "mutant.h"
 
 // #define PRINT_SIGN_MAT
+// #define DEBUG_PRINT
 
 void initiate_program(int pid, int num_processes);
 

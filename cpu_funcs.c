@@ -63,6 +63,7 @@ void initiate_program(int pid, int num_processes)
     int cpu_first_offset = gpu_last_offset;
     int cpu_last_offset = cpu_first_offset + cpu_tasks;
 
+#ifdef DEBUG_PRINT
     printf("pid %2d, total=%4d, per_proc=%4d, cuda start=%4d, cuda end=%4d, cpu start=%4d, cpu end=%4d\n",
             pid,
             total_tasks,
@@ -71,6 +72,7 @@ void initiate_program(int pid, int num_processes)
             gpu_last_offset,
             cpu_first_offset,
             cpu_last_offset);
+#endif
 
     double gpu_best_score = data.is_max ? -INFINITY : INFINITY;
     double cpu_best_score = data.is_max ? -INFINITY : INFINITY;
@@ -89,7 +91,9 @@ void initiate_program(int pid, int num_processes)
     }
 }
 
+#ifdef DEBUG_PRINT
     printf("cpu tasks=%3d, cpu best score=%lf\ngpu tasks=%3d, gpu best score=%lf\n", cpu_tasks, cpu_best_score, gpu_tasks, gpu_best_score);
+#endif
 
     Mutant final_best_mutant = gpu_mutant;
     double final_best_score = gpu_best_score;
@@ -170,7 +174,6 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
 
     double _curr_score;          //  private variable for thread's specific offset score
     Mutant _best_mutant, _temp_mutant;         //  private variables for thread's best and temp mutants
-    int to_save;                //  private variable whether to save the current score or not
 
 #pragma omp for nowait      //  each thread will calculate some of the process tasks and save it's best mutant
     for (int curr_offset = first_offset; curr_offset < last_offset; curr_offset++)    //  iterate for amount of tasks
@@ -178,11 +181,7 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
         //  clculate this offset score, and find the best mutant in that offset
         _curr_score = find_best_mutant_offset(data, curr_offset, &_temp_mutant);
 
-        to_save = (data->is_max) ?                  //  if this is a maximum problem
-                    (_curr_score > _best_score) :     //  save if the current score is greater than the best
-                    (_curr_score < _best_score);      //  otherwise, save if the current score is smaller than the best
-
-        if (to_save)              //  if found better mutation, or it is the first iteration
+        if (is_swapable(&_best_mutant, &_temp_mutant, _best_score, _curr_score, data->is_max))
         {
             _best_mutant = _temp_mutant;
             _best_mutant.offset = curr_offset;
@@ -194,11 +193,7 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
     //  synchronize writing to the global score
     #pragma omp critical
     {
-        to_save = (data->is_max) ?                  //  if this is a maximum problem
-                    (_best_score > gloabl_score) :     //  save if the current score is greater than the best
-                    (_best_score < gloabl_score);      //  otherwise, save if the current score is smaller than the best
-
-        if (to_save)
+        if (is_swapable(return_mutant, &_best_mutant, gloabl_score, _best_score, data->is_max))
         {
             gloabl_score = _best_score;
             *return_mutant = _best_mutant;
@@ -215,7 +210,7 @@ double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt)
     double pair_score, mutant_diff;
     double best_mutant_diff = data->is_max ? -INFINITY : INFINITY;
 
-    int iterations = my_strlen(data->seq2);
+    int iterations = strlen_gpu(data->seq2);
     char c1, c2, sub;
 
     mt->offset = -1;
