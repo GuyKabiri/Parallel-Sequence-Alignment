@@ -33,13 +33,14 @@ extern char hashtable_cpu[NUM_CHARS][NUM_CHARS];
 double gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first_offset, int last_offset);
 
 __global__ void calc_mutants_scores(ProgramData* data, Mutant_GPU* mutants, double* scores, int offsets, int chars, int start_offset);
+__global__ void reduction(double* scores, Mutant_GPU* mutants, int is_max, int num_elements, int stride, int to_aggregate);
 __global__ void max_reduction_chars(double* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars);
 __global__ void max_reduction_offsets(double* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars);
 __global__ void fill_hashtable_gpu();
 
 __device__ int my_ceil(double num);
 __device__ int is_swapable(Mutant_GPU* m1, Mutant_GPU* m2, double s1, double s2, int is_max);
-__device__ double index_best_mutant(double* scores, Mutant_GPU* mutants, int is_max, int offsets_block_size, int chars_block_size);
+__device__ double reduce_last_results(double* scores, Mutant_GPU* mutants, int is_max, int stride);
 
 __host__ __device__ char get_substitute(char c1, char c2, double* w, int is_max);
 __host__ __device__ char get_max_substitute(char c1, char c2, char sign, double* w);

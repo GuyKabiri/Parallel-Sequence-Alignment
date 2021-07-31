@@ -19,14 +19,14 @@ double gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first
     int offsets = last_offset - first_offset;
     int chars = my_strlen(cpu_data->seq2);
 
-    int block_size = floor_highest_power_of2(chars);
-    if (block_size > MAX_BLOCK_SIZE)
-        block_size = MAX_BLOCK_SIZE;
+    int chars_block_size = floor_highest_power_of2(chars);
+    if (chars_block_size > MAX_BLOCK_SIZE)
+        chars_block_size = MAX_BLOCK_SIZE;
 
-    int array_size = block_size * offsets;
-    int grid_size = offsets; //(array_size + threadsPerBlock - 1) / threadsPerBlock;
+    int array_size = chars_block_size * offsets;
+    int chars_grid_size = offsets; //(array_size + threadsPerBlock - 1) / threadsPerBlock;
 
-    printf("threads=%d, blocks=%d, array size=%d, bytes=%lu\n", block_size, grid_size, array_size, (sizeof(Mutant_GPU) + sizeof(double)) * array_size);
+    printf("threads=%d, blocks=%d, array size=%d, bytes=%lu\n", chars_block_size, chars_grid_size, array_size, (sizeof(Mutant_GPU) + sizeof(double)) * array_size);
 
 
     err = cudaMalloc(&gpu_data, sizeof(ProgramData));
@@ -72,7 +72,7 @@ double gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first
 
     // Launch the Kernel
     // printf("blocks=%d, threads=%d\n", blocksPerGrid, threadsPerBlock);
-    calc_mutants_scores<<<grid_size, block_size, 0>>>(gpu_data, gpu_mutant, scores, offsets, chars, first_offset);
+    calc_mutants_scores<<<chars_grid_size, chars_block_size>>>(gpu_data, gpu_mutant, scores, offsets, chars, first_offset);
     err = cudaGetLastError();
     if (err != cudaSuccess)
     {
@@ -80,17 +80,22 @@ double gpu_run_program(ProgramData* cpu_data, Mutant* returned_mutant, int first
         exit(EXIT_FAILURE);
     }
 
-    max_reduction_chars<<<grid_size, block_size>>>(scores, gpu_mutant, cpu_data->is_max, offsets, chars);
+    // max_reduction_chars<<<grid_size, block_size>>>(scores, gpu_mutant, cpu_data->is_max, offsets, chars);
+    reduction<<<chars_grid_size, chars_block_size>>>(scores, gpu_mutant, cpu_data->is_max, array_size, 1, TRUE);
 
-    block_size = floor_highest_power_of2(offsets);
-    if (block_size > MAX_BLOCK_SIZE)
-        block_size = MAX_BLOCK_SIZE;
+
+
+    int offsets_block_size = floor_highest_power_of2(offsets);
+    if (offsets_block_size > MAX_BLOCK_SIZE)
+        offsets_block_size = MAX_BLOCK_SIZE;
     
 
-    grid_size = (offsets + block_size - 1) / block_size;
-    printf("offsets threads=%d, blocks=%d\n", block_size, grid_size);
+    int offsets_grid_size = (offsets + offsets_block_size - 1) / offsets_block_size;
+    printf("offsets threads=%d, blocks=%d\n", offsets_block_size, offsets_grid_size);
 
-    max_reduction_offsets<<<grid_size, block_size>>>(scores, gpu_mutant, cpu_data->is_max, offsets, chars);
+    // max_reduction_offsets<<<grid_size, block_size>>>(scores, gpu_mutant, cpu_data->is_max, offsets, chars);
+    reduction<<<offsets_grid_size, offsets_block_size>>>(scores, gpu_mutant, cpu_data->is_max, array_size, chars_block_size, FALSE);
+
 
     //  the best mutant is in index 0 in mutants array
     err = cudaMemcpy(returned_mutant, &gpu_mutant[0].mutant, sizeof(Mutant), cudaMemcpyDeviceToHost);
@@ -185,90 +190,131 @@ __global__ void calc_mutants_scores(ProgramData* data, Mutant_GPU* mutants, doub
     }
 }
 
-__global__ void max_reduction_chars(double* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars)
+__global__ void reduction(double* scores, Mutant_GPU* mutants, int is_max, int num_elements, int stride, int to_aggregate)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
 
-    int array_size = num_offsets * blockDim.x;
-    if (idx >= array_size)
+    if (idx >= num_elements)
         return;
 
-    int char_pow2 = floor_highest_power_of2(num_chars);
+    int elmnt_idx = idx * stride;
+    int other_elmnt_idx;
+
+    // if (!to_aggregate)
+        // printf("id=%d, score=%g\n", idx, scores[elmnt_idx]);
 
     __syncthreads();
     for (int i = blockDim.x / 2; i > 0; i /= 2)
     {
-        if (idx % blockDim.x  < i)
+        other_elmnt_idx = elmnt_idx + i * stride;
+        if (threadIdx.x < i && other_elmnt_idx < num_elements)
         {
-            int other_idx = idx + i;
-            scores[idx] += scores[other_idx];
-            if (is_swapable(&mutants[idx], &mutants[other_idx], 0, 0, is_max))
-                mutants[idx] = mutants[other_idx];
-        }
-        __syncthreads();
-    }
-}
-
-__global__ void max_reduction_offsets(double* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars)
-{
-    int tidx = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (tidx >= num_offsets)
-        return;
-
-    int char_pow2 = floor_highest_power_of2(num_chars);     //  char_pow2 is the previous block size
-    if (char_pow2 > MAX_BLOCK_SIZE)
-        char_pow2 = MAX_BLOCK_SIZE;
-
-    int idx_global = tidx * char_pow2;  //  id for the global arrays
-
-    int offset_pow2 = floor_highest_power_of2(num_offsets);
-    if (offset_pow2 > MAX_BLOCK_SIZE)
-        offset_pow2 = MAX_BLOCK_SIZE;
-
-    int last_block_num_threads = num_offsets - blockDim.x * (gridDim.x - 1);
-
-    // if (blockIdx.x == gridDim.x - 1 && is_power2(last_block_num_threads))
-    // {
-    //     int last_block_pow2 = floor_highest_power_of2(last_block_num_threads);
-
-    //     if (threadIdx.x == last_block_pow2 - 1)   //  last thread that its ID is power of 2
-    //     {
-    //         int other_global_idx;
-    //         __syncthreads();
-    //         for (int i = 1; i <= last_block_num_threads - last_block_pow2; i++)
-    //         {
-    //             other_global_idx = idx_global + i * char_pow2;
-
-    //             if (is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max))
-    //             {
-    //                 scores[idx_global] = scores[other_global_idx];
-    //                 mutants[idx_global] = mutants[other_global_idx];
-    //             }
-    //         }
-    //     }
-    // }
-
-    __syncthreads();
-    for (int i = offset_pow2 / 2; i > 0; i /= 2)
-    {
-        if (threadIdx.x < i)
-        {
-            int other_global_idx = idx_global + i * char_pow2;
-
-            if (other_global_idx < num_offsets * char_pow2 &&
-                is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max))
+            if (to_aggregate)
             {
-                scores[idx_global] = scores[other_global_idx];
-                mutants[idx_global] = mutants[other_global_idx];
+                scores[elmnt_idx] += scores[other_elmnt_idx];
+                if (is_swapable(&mutants[elmnt_idx], &mutants[other_elmnt_idx], 0, 0, is_max))
+                    mutants[elmnt_idx] = mutants[other_elmnt_idx];
+            }
+            else
+            {
+                if (is_swapable(&mutants[elmnt_idx], &mutants[other_elmnt_idx], scores[elmnt_idx], scores[other_elmnt_idx], is_max))
+                {
+                    mutants[elmnt_idx] = mutants[other_elmnt_idx];
+                    scores[elmnt_idx] = scores[other_elmnt_idx];
+                }
             }
         }
         __syncthreads();
     }
 
-    if (tidx == 0)
-        scores[0] = index_best_mutant(scores, mutants, is_max, blockDim.x, char_pow2);
+    if (idx == 0 && !to_aggregate)
+        scores[0] = reduce_last_results(scores, mutants, is_max, stride * blockDim.x);
 }
+
+// __global__ void max_reduction_chars(double* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars)
+// {
+//     int idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+//     int array_size = num_offsets * blockDim.x;
+//     if (idx >= array_size)
+//         return;
+
+//     // int char_pow2 = floor_highest_power_of2(num_chars);
+    
+//     __syncthreads();
+//     for (int i = blockDim.x / 2; i > 0; i /= 2)
+//     {
+//         if (idx % blockDim.x  < i)
+//         {
+//             int other_idx = idx + i;
+//             scores[idx] += scores[other_idx];
+//             if (is_swapable(&mutants[idx], &mutants[other_idx], 0, 0, is_max))
+//                 mutants[idx] = mutants[other_idx];
+//         }
+//         __syncthreads();
+//     }
+// }
+
+// __global__ void max_reduction_offsets(double* scores, Mutant_GPU* mutants, int is_max, int num_offsets, int num_chars)
+// {
+//     int tidx = blockDim.x * blockIdx.x + threadIdx.x;
+
+//     if (tidx >= num_offsets)
+//         return;
+
+//     int char_pow2 = floor_highest_power_of2(num_chars);     //  char_pow2 is the previous block size
+//     if (char_pow2 > MAX_BLOCK_SIZE)
+//         char_pow2 = MAX_BLOCK_SIZE;
+
+//     int idx_global = tidx * char_pow2;  //  id for the global arrays
+
+//     int offset_pow2 = floor_highest_power_of2(num_offsets);
+//     if (offset_pow2 > MAX_BLOCK_SIZE)
+//         offset_pow2 = MAX_BLOCK_SIZE;
+
+//     // int last_block_num_threads = num_offsets - blockDim.x * (gridDim.x - 1);
+
+//     // if (blockIdx.x == gridDim.x - 1 && is_power2(last_block_num_threads))
+//     // {
+//     //     int last_block_pow2 = floor_highest_power_of2(last_block_num_threads);
+
+//     //     if (threadIdx.x == last_block_pow2 - 1)   //  last thread that its ID is power of 2
+//     //     {
+//     //         int other_global_idx;
+//     //         __syncthreads();
+//     //         for (int i = 1; i <= last_block_num_threads - last_block_pow2; i++)
+//     //         {
+//     //             other_global_idx = idx_global + i * char_pow2;
+
+//     //             if (is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max))
+//     //             {
+//     //                 scores[idx_global] = scores[other_global_idx];
+//     //                 mutants[idx_global] = mutants[other_global_idx];
+//     //             }
+//     //         }
+//     //     }
+//     // }
+
+//     __syncthreads();
+//     for (int i = offset_pow2 / 2; i > 0; i /= 2)
+//     {
+//         if (threadIdx.x < i)
+//         {
+//             int other_global_idx = idx_global + i * char_pow2;
+
+//             if (other_global_idx < num_offsets * char_pow2 &&
+//                 is_swapable(&mutants[idx_global], &mutants[other_global_idx], scores[idx_global], scores[other_global_idx], is_max))
+//             {
+//                 scores[idx_global] = scores[other_global_idx];
+//                 mutants[idx_global] = mutants[other_global_idx];
+//             }
+//         }
+//         __syncthreads();
+//     }
+
+//     if (tidx == 0)
+//         scores[0] = index_best_mutant(scores, mutants, is_max, blockDim.x, char_pow2);
+// }
 
 __global__ void fill_hashtable_gpu()
 {
@@ -292,14 +338,14 @@ __device__ int my_ceil(double num)
     return inum + 1;
 }
 
-__device__ double index_best_mutant(double* scores, Mutant_GPU* mutants, int is_max, int offsets_block_size, int chars_block_size)
+__device__ double reduce_last_results(double* scores, Mutant_GPU* mutants, int is_max, int stride)
 {
     Mutant_GPU best_mutant = mutants[0];
     double best_score = scores[0];
     int idx;
     for (int i = 1; i < gridDim.x; i++)
     {
-        idx = i * offsets_block_size * chars_block_size;
+        idx = i * stride;
         if (is_swapable(&best_mutant, &best_mutant, best_score, scores[idx], is_max))
         {
             best_mutant = mutants[idx];
