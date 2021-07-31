@@ -164,28 +164,27 @@ Z |                                                  *
 
 It is now necessary to implement a parallel solution. As the project will run simultaneously on two machines, each should handle half of the tasks. A single machine should be able to download the input data and write the output data to the file, as specified in the project. The data should be sent between machines using MPI before beginning the search algorithm. Using MPI, one can easily determine the number of processes, so after passing data between processes, one can figure out how many tasks in total will be accomplished. As each process has its own ID, it can determine which specific tasks it will handle (taking into account when dividing the number of tasks unevenly among the number of machines).  
 
+## CPU Implementation
+In the CPU implementation, `OpenMP` will be used, which is an API for threading over the CPU.
+
 ## GPU Implementation
 In the beginning, an implementation similar to that on the CPU was performed. The number of threads created was equal to how many offsets the GPU has to handle. On second thought, that could lead to a failure to utilize all of the GPU's resources, when, for example, there are 3 offsets with each 1,000 characters. The GPU will only allocate three threads, although a higher number could have been allocated. CUDA provides a maximum of 1,024 threads per block, and 65,535 blocks (in each dimension of the grid), which results in a maximum of 67,107,840 threads per block (in one dimension block case). The project limitation is 10,000 letters for `Seq1` and 5,000 letters for `Seq2`, which adds up to 25,000,000 pairs of letters. The idea of allocating a thread for each letter and offset would be much better. Now, each thread will handle a specific pair of letters at a specific offset. Once the threads have completed evaluating the letters, the program has an array of mutations for each pair of letters and the original score of the original letters.  
 
 In order to sum up the array and determine which mutation is optimal, a reduction is required. A reduction of pairs in each offset is necessary, in order to sum the offset's score and the optimal offset's mutation. After that, a second reduction is needed to determine which offset has the best mutation. Instead of linear iteration over the array, the reduction could be implemented in parallel.  
 
 While investigating the parallel reduce algorithm, I realized that the mutations for a given offset will often end up in different thread blocks when the given input has a letter sequence that exceeds 1,024 letters. Because CUDA does not support over-grid thread synchronization, but only per block, it will be very difficult to implement the reduced algorithm. Several ways of handling this situation are suggested over the internet, such as using `counter lock`, which acts like a barrier, or CUDA's `cooperative-groups`, which allows threads to synchronize over the whole group.  
-Time constraints forced me to take another route. Finally, it was decided to generate the number of blocks as the number of offsets, so that if there are more than 1,024 pairs of letters in each offset, some threads will have to calculate a mutation up to 5 times (in case there are 5,000 pairs of letters). A second problem is that the reduction algorithm only works with a power of 2 amount of threads. If the amount of letters or offsets is not a power of 2, squeezing is necessary before performing a reduction. Finally, for the pair evaluation, the highest power of 2 number equals to or less than the number of letters will be the block dimension. In this way, one can reduce the pairs without having to squeeze them. For the offsets, a squeezing is necessary before performing the reduction.
+A different solution had to be found due to time constraints. Finally, it was decided to generate the number of blocks as the number of offsets, so that if there are more than 1,024 pairs of letters in each offset, some threads will have to calculate a mutation up to 5 times (since the maximum number of letters can be up to 5,000).
 
 ## Parallel Reduction
-
-Parallel reduction refers to algorithms which combine an array of elements producing a single value as a result. Problems eligible for this algorithm include those which involve operators that are associative and commutative in nature. Some of them include:
+Parallel reduction refers to algorithms that combine an array of elements to produce a single value. Among the problems that can be solved by this algorithm are those involving operators that are associative and commutative. The following are some examples:
 *  Sum of an array.
 *  Minimum/Maximum of an array.
 
-Assuming one have an array of $ n $ values with $ n $ threads, the reduction algorithm provides a solution with $ log(n) $.
-In order to perform reduction over array with $ n $ elemnts, $ n $ must be a power of 2 ($ 2^i $), if not a squeez have to be perform on the array in order to reduce the array size to be power of 2 (will discribed later). At the beginning of the algorithm, a `stride` constant with the size of $ n /_ 2 $ is defined. In each iteration of the algorithm, every cell performing the reduce operation between itself ($ i $) and $ i + stide $. At the end of each iteration, one need to devide `stride` by 2.
+If one has an array of $ n $ values and $ n $ threads, the reduction algorithm provides a solution of $ log(n) $.
+Reduce an array with $ n $ elements requires the algorithm to calculate the ceiling number of $ n $, which is a power of 2 ($ m = 2^{\lceil{log(n)}\rceil} $). At the beginning of the algorithm, a $ m /_ 2 $ `stride` constant is defined. For each iteration of the algorithm, every cell performs the reduced operation between itself ($ i $) and $ i + stide $. After each iteration, divide `stride` by 2.
 
 ![](https://miro.medium.com/max/875/1*l1uoTZpQUW8YaSjFpcMNlw.png)
-As can see above, array size is $ 16 $, therefore `stride` will be $ 8 $, and the amount of iterations is $ log(16) = 4 $.
-
-### Squeezing
-When the array size ($ n $) is not a power of 2, reducing it is required. One need to find the next number ($ m $) which is a power of 2 and smaller than $ n $. Then, the other items in the array need to be reduced to index $ m $. In the worst case, the squeezing will perform over $ n / 2 - 1 $ elements
+*As can see above, array size is $ 16 $, therefore `stride` will be $ 8 $, and the amount of iterations is $ log(16) = 4 $.*
 
 
 ## How To Run
