@@ -79,22 +79,44 @@ void initiate_program(int pid, int num_processes)
     Mutant gpu_mutant = { -1, -1, NOT_FOUND_CHAR };
     Mutant cpu_mutant = { -1, -1, NOT_FOUND_CHAR };
 
+    if (cpu_tasks > 0)
+        fill_hash(data.weights, pid);
+
+
+#pragma omp parallel
 {
-    if (gpu_tasks > 0)
+    int num_threads = omp_get_num_threads();
+    int tid = omp_get_thread_num();
+    if (gpu_tasks > 0 && tid == 0)
     {
         gpu_best_score = gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
     }
 
     if (cpu_tasks > 0)
     {   
-        cpu_best_score = find_best_mutant_cpu(pid, &data, &cpu_mutant, cpu_first_offset, cpu_last_offset);
+        if (gpu_tasks > 0)
+        {
+            num_threads = 3;
+            tid--;
+        }
+        if (tid != -1)
+        {
+            int tasks_per_thread = (cpu_last_offset - cpu_first_offset) / num_threads;
+            int thread_start = cpu_first_offset + tasks_per_thread * tid;
+            int thread_end = thread_start + tasks_per_thread;
+            if ((cpu_last_offset - cpu_first_offset) % num_threads != 0 && tid == num_threads - 1)
+                thread_end += (cpu_last_offset - cpu_first_offset) % num_threads;
+            find_best_mutant_cpu(pid, &data, &cpu_mutant, thread_start, thread_end, &cpu_best_score);
+        }
+        
     }
+#pragma omp barrier
 }
+
 
 #ifdef DEBUG_PRINT
     printf("cpu tasks=%3d, cpu best score=%lf\ngpu tasks=%3d, gpu best score=%lf\n", cpu_tasks, cpu_best_score, gpu_tasks, gpu_best_score);
 #endif
-
     Mutant final_best_mutant = gpu_mutant;
     double final_best_score = gpu_best_score;
     if ((data.is_max && cpu_best_score > gpu_best_score) || 
@@ -164,20 +186,14 @@ void initiate_program(int pid, int num_processes)
     }
 }
 
-double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset)
-{
-    fill_hash(data->weights, pid);
-    
-    //  global variable for the best score among all threads
-    double gloabl_score = data->is_max ? -INFINITY : INFINITY;
-#pragma omp parallel
-{
+void find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset, double* cpu_score)
+{    
     double _best_score = data->is_max ? -INFINITY : INFINITY;      //  private variable for thread's best score
 
     double _curr_score;          //  private variable for thread's specific offset score
     Mutant _best_mutant, _temp_mutant;         //  private variables for thread's best and temp mutants
 
-#pragma omp for nowait      //  each thread will calculate some of the process tasks and save it's best mutant
+    //  each thread will calculate some of the process tasks and save it's best mutant
     for (int curr_offset = first_offset; curr_offset < last_offset; curr_offset++)    //  iterate for amount of tasks
     {     
         //  clculate this offset score, and find the best mutant in that offset
@@ -195,14 +211,14 @@ double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, i
     //  synchronize writing to the global score
     #pragma omp critical
     {
-        if (is_swapable(return_mutant, &_best_mutant, gloabl_score, _best_score, data->is_max))
+        if (is_swapable(return_mutant, &_best_mutant, *cpu_score, _best_score, data->is_max))
         {
-            gloabl_score = _best_score;
+            *cpu_score = _best_score;
             *return_mutant = _best_mutant;
         }
     }
-}
-    return gloabl_score;
+// }
+    // return gloabl_score;
 }
 
 double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt)

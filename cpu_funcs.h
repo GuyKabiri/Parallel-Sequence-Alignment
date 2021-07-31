@@ -9,7 +9,7 @@
 
 void initiate_program(int pid, int num_processes);
 
-double find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset);
+void find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset, double* cpu_score);
 double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt);
 
 ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data);

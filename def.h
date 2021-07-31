@@ -15,6 +15,7 @@
 #define SPACE_W     3
 
 #define ROOT 0
+#define THREADS_COUNT 4
 
 #define INPUT_FILE "./input.txt"
 #define OUTPUT_FILE "./output.txt"
@@ -42,7 +43,7 @@
 #define MAXIMUM_FUNC 1
 #define MINIMUM_FUNC 0
 
-#define EVALUATION_MODE
+// #define EVALUATION_MODE
 
 typedef unsigned int uint;
 

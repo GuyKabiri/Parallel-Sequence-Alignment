@@ -54,9 +54,13 @@ int main(int argc, char* argv[])
     program_data_type_initiate();
     mutant_type_initiate();
 
+    omp_set_num_threads(THREADS_COUNT);
+
     if (argc == 2)
     {
         cuda_percentage = atoi(argv[1]);
+        if (cuda_percentage == -100)
+            omp_set_num_threads(1);
         if (cuda_percentage < 0 || cuda_percentage > 100)
         {
             if (pid == ROOT)
@@ -70,11 +74,6 @@ int main(int argc, char* argv[])
                 printf("Cuda percentage did not set, set cude_percentage=0\n");
             cuda_percentage = 0;
     }
-
-    if (num_processes == 1)
-        omp_set_num_threads(1);
-    else
-        omp_set_num_threads(4);
 
     time -= MPI_Wtime();    //  substract the mpi initiation time
     initiate_program(pid, num_processes);
