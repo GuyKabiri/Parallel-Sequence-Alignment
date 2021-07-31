@@ -16,8 +16,8 @@
 
 #define ROOT 0
 
-#define INPUT_FILE "./input/input.dat"
-#define OUTPUT_FILE "./output/output.dat"
+#define INPUT_FILE "./input.txt"
+#define OUTPUT_FILE "./output.txt"
 
 #define TRUE 1
 #define FALSE 0
