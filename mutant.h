@@ -11,6 +11,7 @@ typedef struct _mutant {
 
 #define NUM_OF_PARAMS_MUTANT 3
 
+//  GPU algorithm is needed an extra double variable for each mutant in order to save and compare mutations
 typedef struct _gpu_mutant {
     Mutant mutant;
     double diff;

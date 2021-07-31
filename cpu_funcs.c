@@ -19,6 +19,9 @@ char hashtable_cpu[NUM_CHARS][NUM_CHARS];
 char conservatives_cpu[CONSERVATIVE_COUNT][CONSERVATIVE_MAX_LEN] = { "NDEQ", "NEQK", "STA", "MILV", "QHRK", "NHQK", "FYW", "HY", "MILF" };
 char semi_conservatives_cpu[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] = { "SAG", "ATV", "CSA", "SGND", "STPA", "STNK", "NEQHRK", "NDEQHK", "SNDEQK", "HFY", "FVLIM" };
 
+
+//  read the input file, disribute the tasks between all processes, and between each process CPU and GPU tasks
+//  finally, write the results to the output file
 void initiate_program(int pid, int num_processes)
 {
     ProgramData data;
@@ -87,26 +90,26 @@ void initiate_program(int pid, int num_processes)
 {
     int num_threads = omp_get_num_threads();
     int tid = omp_get_thread_num();
-    if (gpu_tasks > 0 && tid == 0)
+    if (gpu_tasks > 0 && tid == ROOT)
     {
         gpu_best_score = gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
     }
 
     if (cpu_tasks > 0)
     {   
-        if (gpu_tasks > 0)
-        {
-            num_threads = 3;
-            tid--;
+        if (gpu_tasks > 0)      //  if the GPU had some tasks, the ROOT thread will be stuck until GPU will end its tasks
+        {                       //  therefore, only 3 threads in the CPU will handle the rest of the tasks
+            num_threads = 3;    
+            tid--;              //  downgrage each thread id, so the ROOT thread will become id=-1
         }
         if (tid != -1)
         {
-            int tasks_per_thread = (cpu_last_offset - cpu_first_offset) / num_threads;
-            int thread_start = cpu_first_offset + tasks_per_thread * tid;
-            int thread_end = thread_start + tasks_per_thread;
-            if ((cpu_last_offset - cpu_first_offset) % num_threads != 0 && tid == num_threads - 1)
+            int tasks_per_thread = (cpu_last_offset - cpu_first_offset) / num_threads;          //  amount of tasks per thread
+            int thread_start = cpu_first_offset + tasks_per_thread * tid;                       //  each thread start offset
+            int thread_end = thread_start + tasks_per_thread;                                   //  each thread end offset
+            if ((cpu_last_offset - cpu_first_offset) % num_threads != 0 && tid == num_threads - 1)  //  if the last thread have some extra tasks
                 thread_end += (cpu_last_offset - cpu_first_offset) % num_threads;
-            find_best_mutant_cpu(pid, &data, &cpu_mutant, thread_start, thread_end, &cpu_best_score);
+            find_best_mutant_cpu(pid, &data, &cpu_mutant, thread_start, thread_end, &cpu_best_score);   //  execute each thread
         }
         
     }
@@ -116,19 +119,19 @@ void initiate_program(int pid, int num_processes)
 #ifdef DEBUG_PRINT
     printf("cpu tasks=%3d, cpu best score=%lf\ngpu tasks=%3d, gpu best score=%lf\n", cpu_tasks, cpu_best_score, gpu_tasks, gpu_best_score);
 #endif
-    Mutant final_best_mutant = gpu_mutant;
+    Mutant final_best_mutant = gpu_mutant;                      //  save the GPU results
     double final_best_score = gpu_best_score;
-    if ((data.is_max && cpu_best_score > gpu_best_score) || 
+    if ((data.is_max && cpu_best_score > gpu_best_score) ||     //  if the CPU found better mutation, replace it
         (!data.is_max && cpu_best_score < gpu_best_score))
     {
         final_best_mutant = cpu_mutant;
         final_best_score = cpu_best_score;
     }
 
-    double my_best[2] = { 0 };
-    my_best[0] = final_best_score;
-    my_best[1] = pid;
-    double gloabl_best[2] = { 0 };
+    double my_best[2] = { 0 };          //  this array will be send to MPI_Allreduce to find the min or max results of all processes
+    my_best[0] = final_best_score;      //  first index will be used to save the process score
+    my_best[1] = pid;                   //  second is for its id
+    double gloabl_best[2] = { 0 };      //  the min/max result will be sent to all processes in this array
 
     //  MPI_Allreduce will find the MAX or MIN value that sent from all the processes
     //  and send it to all processes with the process id that holds that value
@@ -185,6 +188,8 @@ void initiate_program(int pid, int num_processes)
     }
 }
 
+
+//  find the best mutation of all the given offsets
 void find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset, double* cpu_score)
 {    
     double _best_score = data->is_max ? -INFINITY : INFINITY;      //  private variable for thread's best score
@@ -216,10 +221,10 @@ void find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int
             *return_mutant = _best_mutant;
         }
     }
-// }
-    // return gloabl_score;
 }
 
+
+// find the best mutation in a given offset
 double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt)
 {
     int idx1, idx2;
@@ -230,11 +235,11 @@ double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt)
     int iterations = strlen_gpu(data->seq2);
     char c1, c2, sub;
 
-    mt->offset = -1;
+    mt->offset = -1;            //  initiate mutation with default values
     mt->char_offset = -1;
     mt->ch = NOT_FOUND_CHAR;
 
-    for (int i = 0; i < iterations; i++)            //  iterate over all the characters
+    for (int i = 0; i < iterations; i++)        //  iterate over all the characters
     {
         idx1 = offset + i;                      //  index of seq1
         idx2 = i;                               //  index of seq2
@@ -265,13 +270,15 @@ double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt)
     return total_score + best_mutant_diff;     //  best mutant is returned in struct mt
 }
 
+
+// parallel filling the hashtable on the CPU side
 void fill_hash(double* weights, int pid)
 {
     char c1, c2;
 #pragma omp parallel for
     for (int i = 0; i < NUM_CHARS; i++)
     {
-        c1 = FIRST_CHAR + i;               //  FIRST_CHAR = A -> therefore (FIRST_CHAR + i) will represent all characters from A to Z
+        c1 = FIRST_CHAR + i;                    //  FIRST_CHAR = A -> therefore (FIRST_CHAR + i) will represent all characters from A to Z
         for (int j = 0; j <= i; j++)            //  it would be time-consuming to fill the top triangle of a hash table, because it is cyclic (hash[x][y] = hash[y][x])
         {
             c2 = FIRST_CHAR + j;
@@ -281,6 +288,8 @@ void fill_hash(double* weights, int pid)
     }
 }
 
+
+//  pretty printing the hashtable
 void print_hash()
 {
     char last_char = FIRST_CHAR + NUM_CHARS;
@@ -310,6 +319,7 @@ void print_hash()
     printf("\n");
 }
 
+
 //  reads two sequences, weights, and the assignment type (maximum / minimum) from a input file
 ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)
 {
@@ -328,6 +338,7 @@ ProgramData* read_seq_and_weights_from_file(FILE* file, ProgramData* data)
     return data;
 }
 
+
 //	write the results into a file
 //	return 0 on error, otherwise 1
 int write_results_to_file(FILE* file, char* mutant, int offset, double score)
@@ -336,6 +347,7 @@ int write_results_to_file(FILE* file, char* mutant, int offset, double score)
 
 	return fprintf(file, "%s\n%d %g", mutant, offset, score) > 0;	//	fprintf will return negative value if error occurred while writing to the file
 }
+
 
 //  pretty printing the sequences and the character-wise comparation between them
 void pretty_print(ProgramData* data, char* mut, int offset, int char_offset)
@@ -383,6 +395,8 @@ void pretty_print(ProgramData* data, char* mut, int offset, int char_offset)
     printf("Seq offset=%3d, Char offset=%3d\n", offset, char_offset);
 }
 
+
+//  get the score and signs array of 2 sequences for pretty printing
 double get_score_and_signs(char* seq1, char* seq2, double* weights, int offset, char* signs)
 {
     int idx1 = offset;
@@ -397,6 +411,8 @@ double get_score_and_signs(char* seq1, char* seq2, double* weights, int offset, 
     return score;
 }
 
+
+//  pretty printing a sequence of character with a given offset
 void print_with_offset(char* chrs, int offset, int char_offset)
 {
     if (char_offset < 0)

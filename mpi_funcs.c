@@ -7,6 +7,8 @@
 MPI_Datatype mutant_type;
 MPI_Datatype program_data_type;
 
+
+//	initiating MPI's program data datatype
 void program_data_type_initiate()
 {
 					//	each parameter count
@@ -25,6 +27,8 @@ void program_data_type_initiate()
 	MPI_Type_commit(&program_data_type);
 }
 
+
+//	initiating MPI's mutation datatype
 void mutant_type_initiate()
 {
 					//	each parameter count
@@ -40,6 +44,8 @@ void mutant_type_initiate()
 	MPI_Type_commit(&mutant_type);
 }
 
+
+//	freeing MPI datatype
 void mpi_free_type(MPI_Datatype* type)
 {
 	MPI_Type_free(type);
