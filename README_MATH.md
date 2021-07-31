@@ -16,12 +16,9 @@ The following definitions apply:
 
 ### ***Equation***
 Since each sign is weighted, the following equation will result from comparing two sequences:  
-<!-- $$ S = N_{1} \times W_{1} - N_{2} \times W_{2} - N_{3} \times W_{3} - N_{4} \times W_{4} $$ -->
-![](https://render.githubusercontent.com/render/math?math=S=N_{1}%20\times%20W_{1}%20-%20N_{2}%20\times%20W_{2}%20-%20N_{3}%20\times%20W_{3}%20-%20N_{4}%20\times%20W_{4})
+$$ S = N_{1} \times W_{1} - N_{2} \times W_{2} - N_{3} \times W_{3} - N_{4} \times W_{4} $$
 
-<!-- >   $ N_{i} $ represents the amount, and $ W_{i} $ represents the weight, respectively, of `*`, `:`, `.`, and `_`. -->
-
->  ![](https://render.githubusercontent.com/render/math?math=N_{i}) represents the amount, and ![](https://render.githubusercontent.com/render/math?math=W_{i}) represents the weight, respectively, of `*`, `:`, `.`, and `_`.
+>   $ N_{i} $ represents the amount, and $ W_{i} $ represents the weight, respectively, of `*`, `:`, `.`, and `_`.
 
 ### ***Groups***
 <table>
@@ -113,7 +110,7 @@ ELMVRTNMYTONEWVFNVJERVMKLWEMVKL
 
 
 ## ***Mutation***
-For a given Sequence `S` we define a Mutant Sequence ![](https://render.githubusercontent.com/render/math?math=MS(n)) which is received by substitution of one or more characters by other character defined by Substitution Rules:
+For a given Sequence `S` we define a Mutant Sequence $ MS(n) $ which is received by substitution of one or more characters by other character defined by Substitution Rules:
 *	The original character is allowed to be substituted by another character if there is no conservative group that contains both characters.  
     For example:
     *	`N` is not allowed to be substituted by `H` because both characterss present in conservative group `NHQK`.
@@ -129,9 +126,9 @@ Initially, a basic iterative solution was implemented. By iterating over the off
 The main objective is to parallelize the CPU and GPU simultaneously, taking advantage of their maximum abilities.
 
 ### ***CPU Implementation***
-Having written the sequential solution, I realized it would be time-wasting to check whether each pair of letters belongs to a conservative or semi-conservative group several times during the run. Despite the fact that iterations over the groups are non-linear (![](https://render.githubusercontent.com/render/math?math=O(1))) (since the number of groups and letters in each group is constant), the groups are given ahead of time, so each evaluation of two letters can be done before the program is run, saving significant time.  
+Having written the sequential solution, I realized it would be time-wasting to check whether each pair of letters belongs to a conservative or semi-conservative group several times during the run. Despite the fact that iterations over the groups are non-linear ($O(1) $) (since the number of groups and letters in each group is constant), the groups are given ahead of time, so each evaluation of two letters can be done before the program is run, saving significant time.  
 
-Consequently, I created a hashtable of 26 letters and one `-` character (27 X 27). Each pair is still evaluated in ![](https://render.githubusercontent.com/render/math?math=O(1)), but this method is much faster than the previous one.  
+Consequently, I created a hashtable of 26 letters and one `-` character (27 X 27). Each pair is still evaluated in $ O(1) $, but this method is much faster than the previous one.  
 Additionally, `OpenMP` can be used for filling this hashtable in such a way that every cell is independent of every other cell.  
 The hashtable (spaces were used instead of `_`) is as follows:
 
@@ -184,27 +181,28 @@ Parallel reduction refers to algorithms that combine an array of elements to pro
 *  Sum of an array.
 *  Minimum/Maximum of an array.
 
-If one has an array of ![](https://render.githubusercontent.com/render/math?math=n) values and ![](https://render.githubusercontent.com/render/math?math=n) threads, the reduction algorithm provides a solution of ![](https://render.githubusercontent.com/render/math?math=log(n)).
-Reduce an array with ![](https://render.githubusercontent.com/render/math?math=n) elements requires the algorithm to calculate the ceiling number of ![](https://render.githubusercontent.com/render/math?math=n), which is a power of 2 (![](https://render.githubusercontent.com/render/math?math=m%20=%202^{\lceil{log(n)}\rceil})). At the beginning of the algorithm, a ![](https://render.githubusercontent.com/render/math?math=\frac{m}{2}) `stride` constant is defined. For each iteration of the algorithm, every cell performs the reduced operation between itself (`i`) and `i + stide`. After each iteration, divide `stride` by 2.
+If one has an array of $ n $ values and $ n $ threads, the reduction algorithm provides a solution of $ log(n) $.
+Reduce an array with $ n $ elements requires the algorithm to calculate the ceiling number of $ n $, which is a power of 2 ($ m = 2^{\lceil{log(n)}\rceil} $). At the beginning of the algorithm, a $ m/_2 $ `stride` constant is defined. For each iteration of the algorithm, every cell performs the reduced operation between itself ($ i $) and $ i + stide $. After each iteration, divide `stride` by 2.
 
 ![](https://miro.medium.com/max/875/1*l1uoTZpQUW8YaSjFpcMNlw.png)
-*As can see above, array size is 16, therefore `stride` will be 8, and the amount of iterations is ![](https://render.githubusercontent.com/render/math?math=log(16)%20=%204).*
+*As can see above, array size is $ 16 $, therefore `stride` will be $ 8 $, and the amount of iterations is $ log(16) = 4 $.*
 
 
 
 ## ***Complexity***
-The complexity of this solution depends on the length of both sequences. Using ![](https://render.githubusercontent.com/render/math?math=len(seq1)=n), and ![](https://render.githubusercontent.com/render/math?math=len(seq2)=m), the amount of offset will be ![](https://render.githubusercontent.com/render/math?math=n-m%2B1). Each offset evolves the evaluation of $m$ pairs of letters. Calculation of CPU and GPU will be done separately for simplicity.
+The complexity of this solution depends on the length of both sequences. Using $len(seq1)=n$, and $len(seq2)=m$, the amount of offset will be $n-m+1=f$. Each offset evolves the evaluation of $m$ pairs of letters. Calculation of CPU and GPU will be done separately for simplicity.
 
 ### ***CPU Complexity***
-By parallelizing the offsets, each thread will handle ![](https://render.githubusercontent.com/render/math?math=\frac{n}{4}) offsets, which has a complexity of ![](https://render.githubusercontent.com/render/math?math=O(n)). In each offset, a sequential iteration over the letters is performed, which takes ![](https://render.githubusercontent.com/render/math?math=O(m)). Having found the best mutation for each thread, all threads will be compared. There are as many threads as there are cores in the CPU, so the evaluation is linear. Thus, the complexity of the CPU is ![](https://render.githubusercontent.com/render/math?math=O(nm)).
+By parallelizing the offsets, each thread will handle $n/_4$ offsets, which has a complexity of $O(n)$. In each offset, a sequential iteration over the letters is performed, which takes $O(m)$. Having found the best mutation for each thread, all threads will be compared. There are as many threads as there are cores in the CPU, so the evaluation is linear. Thus, the complexity of the CPU is $O(nm)$.
 
 ### ***GPU Complexity***
-The GPU represents each offset as a block of threads, each thread, as discussed earlier, will handle a maximum of five pairs of letters, which means that all possible mutations are evaluated in ![](https://render.githubusercontent.com/render/math?math=O(1)). A reduction algorithm is run twice after evaluating the mutations. Initially, each block of threads will reduce its own mutations, since each offset has ![](https://render.githubusercontent.com/render/math?math=m) pairs, it takes ![](https://render.githubusercontent.com/render/math?math=O(log(m))).
-Having ![](https://render.githubusercontent.com/render/math?math=n-m%2b1) offsets, the complexity of the second reduction is ![](https://render.githubusercontent.com/render/math?math=O(log(n-m+1))). All these operations are performed separately, combining all of them will produce complexity ![](https://render.githubusercontent.com/render/math?math=O(1)%2BO(log(m))%2BO(log(n-m%2B1))), resulting in ![](https://render.githubusercontent.com/render/math?math=O(log(m))%2bO(log(n-m%2b1))).  
+The GPU represents each offset as a block of threads, each thread, as discussed earlier, will handle a maximum of five pairs of letters, which means that all possible mutations are evaluated in $O(1)$.  
+A reduction algorithm is run twice after evaluating the mutations. Initially, each block of threads will reduce its own mutations, since each offset has $m$ pairs, it takes $O (log(m))$.
+Having $n-m+1$ offsets, the complexity of the second reduction is $O(log(n-m+1))$. All these operations are performed separately, combining all of them will produce complexity $O(1)+O(log(m))+O(log(n-m+1))$, resulting in $O(log(m))+O(log(n-m+1))$.  
 
 
-Since the CPU and GPU are both working at the same time, and each is handling a portion of the task, dividing ![](https://render.githubusercontent.com/render/math?math=n) or ![](https://render.githubusercontent.com/render/math?math=m) by a constant will not affect the "big O" equation.  
-Therefore, running both at the same time will result in ![](https://render.githubusercontent.com/render/math?math=O(nm)%2bO(log(m))%2bO(log(n-m%2b1)))
+Since the CPU and GPU are both working at the same time, and each is handling a portion of the task, dividing $n$ or $m$ by a constant will not affect the "big O" equation.  
+Therefore, running both at the same time will result in $O(nm)+O(log(m))+O(log(n-m+1))$.
 
 
 ## ***How To Run***
@@ -230,3 +228,4 @@ The following can be run on a single machine:
 mpiexec -np {NUM} ./{EXECUTABLE}
 ```
 *In this case, `{EXECUTABLE}` is the name of the executable file, and `{NUM}` is the number of processes to be initiated.*
+{"mode":"full","isActive":false}
