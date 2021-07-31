@@ -64,16 +64,19 @@ int main(int argc, char* argv[])
         if (cuda_percentage < 0 || cuda_percentage > 100)
         {
             if (pid == ROOT)
-                printf("Cuda percentage invalid (%d), set cude_percentage=0\n", cuda_percentage);
+                printf("Set cude_percentage=0\n");
             cuda_percentage = 0;
         }
     }
     else if (argc == 1)
     {
         if (pid == ROOT)
-                printf("Cuda percentage did not set, set cude_percentage=0\n");
+                printf("CUDA percentage did not set, set cude_percentage=0\n");
             cuda_percentage = 0;
     }
+
+    if (pid == ROOT)
+        printf("threads=%2d, processes=%2d\n", omp_get_max_threads(), num_processes);
 
     time -= MPI_Wtime();    //  substract the mpi initiation time
     initiate_program(pid, num_processes);

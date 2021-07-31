@@ -15,8 +15,8 @@ build:
 clean:
 	rm -f *.o ./mpiCudaOpenMP
 
-run:
-	mpiexec -np 1 ./mpiCudaOpenMP 0
+runseq:
+	mpiexec -np 1 ./mpiCudaOpenMP -100
 
 runcuda:
 	mpiexec -np 1 ./mpiCudaOpenMP 100

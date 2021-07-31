@@ -110,7 +110,6 @@ void initiate_program(int pid, int num_processes)
         }
         
     }
-#pragma omp barrier
 }
 
 
