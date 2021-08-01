@@ -113,8 +113,8 @@ ELMVRTNMYTONEWVFNVJERVMKLWEMVKL
 For a given Sequence `S` we define a Mutant Sequence $ MS(n) $ which is received by substitution of one or more characters by other character defined by Substitution Rules:
 *	The original character is allowed to be substituted by another character if there is no conservative group that contains both characters.  
     For example:
-    *	`N` is not allowed to be substituted by `H` because both characterss present in conservative group `NHQK`.
-    *   `N` may be substituted by `W` because there is now conservative group that contains both `N` and `W`.
+    * `N` is not allowed to be substituted by `H` because both characterss present in conservative group `NHQK`.
+    * `N` may be substituted by `W` because there is now conservative group that contains both `N` and `W`.
 *   It is not mandatory to substitute all instances of some characters by same substitution character, for example the sequence `PSHLSPSQ` has Mutant Sequence `PFHLSPLQ`.  
 
 ## ***Project Definition***
@@ -126,14 +126,17 @@ A mutation of the sequences `Seq2` and it's offset is need to be found, which pr
 Initially, a basic iterative solution was implemented. By iterating over the offsets and then for each pair of letters in the offset, the problem can be solved sequentially.  
 Comparing each pair of letters to determine whether they are equal or fall into one of the conservative or semi-conservative groups, then finding their best substitutions (if possible).  
 Hence, save any better substitution found for a pair than the previous one.  
-The main objective is to parallelize the CPU and GPU simultaneously, taking advantage of their maximum abilities.
+The main objective of this project is to parallelize the CPU and GPU simultaneously, taking advantage of their maximum abilities.  
+At first, it is necessary to examine what can be parallelizing in this problem, which menas, what tasks are being done and do not depend on other tasks.  
+The program will aimed to run on 2 machine at the same time, which will involve in usin `MPI` for data sending between them.
 
 ### ***CPU Implementation***
 Having written the sequential solution, I realized it would be time-wasting to check whether each pair of letters belongs to a conservative or semi-conservative group several times during the run.  
-Despite the fact that iterations over the groups are non-linear ($O(1) $) (since the number of groups and letters in each group is constant), the groups are given ahead of time, so each evaluation of two letters can be done before the program is run, saving significant time.  
+Despite the fact that iterations over the groups are non-linear ($O(1)$) (since the number of groups and letters in each group is constant), the groups are given ahead of time, so each evaluation of two letters can be done before the program is run, saving significant time.  
 
-Consequently, I created a hashtable of 26 letters and one `-` character (27 X 27). Each pair is still evaluated in $ O(1) $, but this method is much faster than the previous one.  
-Additionally, `OpenMP` can be used for filling this hashtable in such a way that every cell is independent of every other cell.  
+Consequently, I created a hashtable of 26 letters and one `-` character (27 X 27). 
+Although each pair is still evaluated in $O(1)$, this method is much faster than the previous one.  
+Additionally, `OpenMP` can be used for filling this hashtable, since each cell in the table is calculated independently.  
 The hashtable (spaces were used instead of `_`) is as follows:
 
 ```
@@ -170,27 +173,29 @@ Z |                                                  *
 
 It is now necessary to implement a parallel solution. As the project will run simultaneously on two machines, each should handle half of the tasks.  
 A single machine should be able to download the input data and write the output data to the file, as specified in the project. The data should be sent between machines using MPI before beginning the search algorithm.  
-Using MPI, one can easily determine the number of processes, so after passing data between processes, one can figure out how many tasks in total will be accomplished. As each process has its own ID, it can determine which specific tasks it will handle (taking into account when dividing the number of tasks unevenly among the number of machines).  
-As for the mutation evaluation, OpenMP can be used so that each thread will receive a portion of the tasks.  
-Parallelizing can be done in one of two ways: either parallel the offsets between the two sequences, and iterate sequentially over the pairs at each offset, or sequentially iterate over the offsets and parallel the pairs at each offset.  
-Since it requires more effort to calculate a whole mutant in each offset than to evaluate a pair of letters, the first method was adopted.
-
+Since each offset and pair of letters within each offset are independent, parallelizing with the CPU can be accomplished in two ways: either parallelize offsets between the two sequences and iterate sequentially over the pairs at offsets, or parallelize offsets and parallel the pairs at offsets.  
+By taking the second method and parallelizing the pairs in each offset it will be necessary later to somehow sum the pairs score, or to use mechanism such as `critical blocks` to find the total offset's score.
+Therefore, the first method appears to be more efficient.
+Using MPI, one can easily determine the number of processes, so after passing data between processes, one can figure out how many offsets in total will be accomplished. As each process has its own ID, it can determine which specific offsets it will handle (taking into account when dividing the number of offsets unevenly among the number of machines).  
+Additionally, the machine provided has quad-core CPUs.
+Creating more threads than there are cores will not improve performance, and may even result in slower run times because the CPU will have to switch between them.
 
 ### ***GPU Implementation***
 In the beginning, an implementation similar to that on the CPU was performed. The number of threads created was equal to how many offsets the GPU has to handle.  
 On second thought, that could lead to a failure to utilize all of the GPU's resources, when, for example, there are 3 offsets with each 1,000 characters.  
 The GPU will only allocate three threads, although a higher number could have been allocated.  
 CUDA provides a maximum of 1,024 threads per block, and 65,535 blocks (in each dimension of the grid), which results in a maximum of 67,107,840 threads per block (in one dimension block case).  
-The project limitation is 10,000 letters for `Seq1` and 5,000 letters for `Seq2`, which adds up to 25,000,000 pairs of letters. The idea of allocating a thread for each letter and offset would be much better.  
+The project limitation is 10,000 letters for `Seq1` and 5,000 letters for `Seq2`, which adds up to 25,000,000 pairs of letters.  
+The pairs of letters and offsets are independent of each other as discussed above.  
+Allocating a thread for each offset and letter would be a much better idea.  
+In CUDA, threads are structured into blocks, with each thread having a unique `block-id` and `thread-id` that can be used to determine which offset and pair in that offset it should handle.
 Now, each thread will handle a specific pair of letters at a specific offset.  
 Once the threads have completed evaluating the letters, the program has an array of mutations for each pair of letters and the original score of the original letters.  
-
 In order to sum up the array and determine which mutation is optimal, a reduction is required.  
 A reduction of pairs in each offset is necessary, in order to sum the offset's score and the optimal offset's mutation.  
 After that, a second reduction is needed to determine which offset has the best mutation. Instead of linear iteration over the array, the reduction could be implemented in parallel.  
-
 While investigating the parallel reduce algorithm, I realized that the mutations for a given offset will often end up in different thread blocks when the given input has a letter sequence that exceeds 1,024 letters.  
-Because CUDA does not support over-grid thread synchronization, but only per block, it will be very difficult to implement the reduced algorithm.  
+Because CUDA does not support over-grid thread-synchronization, but only per block, it will be very difficult to implement the reduction algorithm.  
 Several ways of handling this situation are suggested over the internet, such as using `counter lock`, which acts like a barrier, or CUDA's `cooperative-groups`, which allows threads to synchronize over the whole group.  
 A different solution had to be found due to time constraints. Finally, it was decided to generate the number of blocks as the number of offsets, so that if there are more than 1,024 pairs of letters in each offset, some threads will have to calculate a mutation up to 5 times (since the maximum number of letters can be up to 5,000).
 
@@ -218,7 +223,8 @@ Run-time evaluations were performed on a number of configurations with multiple 
 
 The following configuration was selected for the project based on the runtime of these configurations:  
 The separation of CUDA and OpenMP will not be more efficient than running the task with only CUDA if the number of tasks (number of offsets times number of letters to evaluate) exceeds 20% of the maximum possible tasks (25,005,000).  
-Furthermore, if the amount of tasks is small, it would be wasteful to allocate and copy memory over the GPU. If the tasks are smaller than 20%, only OpenMP will handle them; otherwise, just the GPU.
+Furthermore, if the amount of tasks is small, it would be wasteful to allocate and copy memory over the GPU.  
+If the tasks are smaller than 20%, only OpenMP will handle them; otherwise, just the GPU.
 
 
 ## ***Complexity***
@@ -238,9 +244,7 @@ A reduction algorithm is run twice after evaluating the mutations. Initially, ea
 Having $n-m+1$ offsets, the complexity of the second reduction is $O(log(n-m))$.  
 All these operations are performed separately, combining all of them will produce complexity $O(1)+O(log(m))+O(log(n-m))$, resulting in $O(log(m))+O(log(n-m))$.  
 
-
-Since the CPU and GPU are both working at the same time, and each is handling a portion of the task, dividing $n$ or $m$ by a constant will not affect the "big O" equation.  
-Therefore, running both at the same time will result in $O(nm-m^2)+O(log(m))+O(log(n-m))$.
+Because it is determined at runtime, and based on input, whether to allocate tasks to the CPU or GPU, the total complexity is $O(nm-m^2)+O(log(m))+O(log(n-m))$.
 
 
 ## ***How To Run***
