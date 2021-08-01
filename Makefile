@@ -18,35 +18,5 @@ clean:
 runseq:
 	mpiexec -np 1 ./mpiCudaOpenMP -100
 
-runcuda:
-	mpiexec -np 1 ./mpiCudaOpenMP 100
-
-
-
-
-runSeqNoCuda: 
-	mpiexec -np 1 ./mpiCudaOpenMP 0
-
-runSeqHalfCuda: 
-	mpiexec -np 1 ./mpiCudaOpenMP 50
-
-runSeqFullCuda: 
-	mpiexec -np 1 ./mpiCudaOpenMP 100
-
-run1CompParNoCuda: 
-	mpiexec -np 2 ./mpiCudaOpenMP 0
-
-run1CompParHalfCuda: 
-	mpiexec -np 2 ./mpiCudaOpenMP 50
-
-run1CompParFullCuda: 
-	mpiexec -np 2 ./mpiCudaOpenMP 100
-
-run2CompParNoCuda: 
-	mpiexec -np 2 -machinefile  mf  -map-by  node  ./mpiCudaOpenMP 0
-
-run2CompParHalfCuda: 
-	mpiexec -np 2 -machinefile  mf  -map-by  node  ./mpiCudaOpenMP 50
-
-run2CompParFullCuda: 
-	mpiexec -np 2 -machinefile  mf  -map-by  node  ./mpiCudaOpenMP 100
+run:
+	mpiexec -np 2 -machinefile mf -map-by node ./mpiCudaOpenMP
