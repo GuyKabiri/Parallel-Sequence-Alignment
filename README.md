@@ -221,13 +221,13 @@ While for a smaller input, allocating and copying data to the GPU would take mor
 
 ## ***How To Run***
 The project was developed using `MPI`, `OpenMP`, and `CUDA`. Therefore, all of those library had to be installed for the project to run.  
-An input file with a name of `input.txt` or `input.dat`, and with the following structure has to be present in the root directory:
+An input file with a name of `input.txt`, and with the following structure has to be present in the root directory:
 *   The first line will contain 4 weights (decimal or non decimal) in the exact order of `W1`, `W2`, `W3`, and `W4`.
 *   The seconde line will contains the first sequence `Seq1` (up to 10,000 characters).
 *   The third line will contains the second sequence `Seq2` (up to 5,000characters).
 *   The last line will contain the string `maximum` or `minimum` to define the algorithm which defines the goal of the search.  
 
-The output file will results with the mutant of `Seq2` in the first line, and it's offset and score in the second line.
+The output file (`output.txt`) will results with the mutant of `Seq2` in the first line, and it's offset and score in the second line.
 
 A machinefile (`mf`) with subnetwork IP addresses is required for this project to run on two machines at the same time.  
 Once the executable program is present on both machines and the file have been created on the main machine, run the following:
@@ -242,3 +242,10 @@ The following can be run on a single machine:
 mpiexec -np {NUM} ./{EXECUTABLE}
 ```
 *In this case, `{EXECUTABLE}` is the name of the executable file, and `{NUM}` is the number of processes to be initiated.*
+
+## ***References***
+*  [Sequence alignment article on Wikipedia](https://en.wikipedia.org/wiki/Sequence_alignment)
+*  [NVIDIA's Optimizing Parallel Reduction in CUDA](https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf)
+*  [Parallel reduction (e.g. how to sum an array)](https://sodocumentation.net/cuda/topic/6566/parallel-reduction--e-g--how-to-sum-an-array-)
+*  [Parallel Reduction with CUDA](https://shreeraman-ak.medium.com/parallel-reduction-with-cuda-d0ae10c1ae2c)
+*  [University of Illinois Urbana-Champaign's MPI Datatypes Lecture](https://wgropp.cs.illinois.edu/courses/cs598-s16/lectures/lecture27a.pdf)
