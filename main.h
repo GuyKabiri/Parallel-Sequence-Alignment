@@ -6,5 +6,6 @@
 int cuda_percentage;
 
 int main(int argc, char* argv[]);
+void sequences_generator();
 
 #endif //__MAIN_H__

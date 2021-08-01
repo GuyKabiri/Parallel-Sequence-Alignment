@@ -22,9 +22,10 @@ char semi_conservatives_cpu[SEMI_CONSERVATIVE_COUNT][SEMI_CONSERVATIVE_MAX_LEN] 
 
 //  read the input file, disribute the tasks between all processes, and between each process CPU and GPU tasks
 //  finally, write the results to the output file
-void initiate_program(int pid, int num_processes)
+double initiate_program(int pid, int num_processes)
 {
     ProgramData data;
+    double time;
 
     if (pid == ROOT)
     {
@@ -50,86 +51,18 @@ void initiate_program(int pid, int num_processes)
         MPI_Bcast(&data, 1, program_data_type, ROOT, MPI_COMM_WORLD);
     }
 
-    int total_tasks = strlen(data.seq1) - strlen(data.seq2) + 1;
-    int per_proc_tasks = total_tasks / num_processes;
+    if (pid == ROOT)
+        printf("threads=%2d, processes=%2d\n", omp_get_max_threads(), num_processes);
 
-    int first_offset = per_proc_tasks * pid;  //  each process will handle the same amount of tasks, therefore, offset will be multiply by the process index
-    int last_offset = per_proc_tasks + first_offset;
-    if (pid == num_processes - 1)    //  if the tasks do not divide by the number of processes, the last process will handle any additional tasks
-        last_offset += total_tasks % num_processes;
-        
-    int gpu_tasks = (last_offset - first_offset) * cuda_percentage / 100;
-    int gpu_first_offset = first_offset;
-    int gpu_last_offset = gpu_first_offset + gpu_tasks;
+    time = MPI_Wtime();
 
-    int cpu_tasks = (last_offset - first_offset) - gpu_tasks;
-    int cpu_first_offset = gpu_last_offset;
-    int cpu_last_offset = cpu_first_offset + cpu_tasks;
+    Mutant mutant;
+    double score = divide_execute_tasks(&data, num_processes, pid, &mutant);
 
-#ifdef DEBUG_PRINT
-    printf("pid %2d, total=%4d, per_proc=%4d, cuda start=%4d, cuda end=%4d, cpu start=%4d, cpu end=%4d\n",
-            pid,
-            total_tasks,
-            last_offset - first_offset,
-            gpu_first_offset,
-            gpu_last_offset,
-            cpu_first_offset,
-            cpu_last_offset);
-#endif
-
-    double gpu_best_score = data.is_max ? -INFINITY : INFINITY;
-    double cpu_best_score = data.is_max ? -INFINITY : INFINITY;
-    Mutant gpu_mutant = { -1, -1, NOT_FOUND_CHAR };
-    Mutant cpu_mutant = { -1, -1, NOT_FOUND_CHAR };
-
-    if (cpu_tasks > 0)
-        fill_hash(data.weights, pid);
-
-
-#pragma omp parallel
-{
-    int num_threads = omp_get_num_threads();
-    int tid = omp_get_thread_num();
-    if (gpu_tasks > 0 && tid == ROOT)
-    {
-        gpu_best_score = gpu_run_program(&data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
-    }
-
-    if (cpu_tasks > 0)
-    {   
-        if (gpu_tasks > 0)      //  if the GPU had some tasks, the ROOT thread will be stuck until GPU will end its tasks
-        {                       //  therefore, only 3 threads in the CPU will handle the rest of the tasks
-            num_threads = 3;    
-            tid--;              //  downgrage each thread id, so the ROOT thread will become id=-1
-        }
-        if (tid != -1)
-        {
-            int tasks_per_thread = (cpu_last_offset - cpu_first_offset) / num_threads;          //  amount of tasks per thread
-            int thread_start = cpu_first_offset + tasks_per_thread * tid;                       //  each thread start offset
-            int thread_end = thread_start + tasks_per_thread;                                   //  each thread end offset
-            if ((cpu_last_offset - cpu_first_offset) % num_threads != 0 && tid == num_threads - 1)  //  if the last thread have some extra tasks
-                thread_end += (cpu_last_offset - cpu_first_offset) % num_threads;
-            find_best_mutant_cpu(pid, &data, &cpu_mutant, thread_start, thread_end, &cpu_best_score);   //  execute each thread
-        }
-        
-    }
-}
-
-
-#ifdef DEBUG_PRINT
-    printf("cpu tasks=%3d, cpu best score=%lf\ngpu tasks=%3d, gpu best score=%lf\n", cpu_tasks, cpu_best_score, gpu_tasks, gpu_best_score);
-#endif
-    Mutant final_best_mutant = gpu_mutant;                      //  save the GPU results
-    double final_best_score = gpu_best_score;
-    if ((data.is_max && cpu_best_score > gpu_best_score) ||     //  if the CPU found better mutation, replace it
-        (!data.is_max && cpu_best_score < gpu_best_score))
-    {
-        final_best_mutant = cpu_mutant;
-        final_best_score = cpu_best_score;
-    }
+    time = MPI_Wtime() - time;
 
     double my_best[2] = { 0 };          //  this array will be send to MPI_Allreduce to find the min or max results of all processes
-    my_best[0] = final_best_score;      //  first index will be used to save the process score
+    my_best[0] = score;      //  first index will be used to save the process score
     my_best[1] = pid;                   //  second is for its id
     double gloabl_best[2] = { 0 };      //  the min/max result will be sent to all processes in this array
 
@@ -148,21 +81,21 @@ void initiate_program(int pid, int num_processes)
     //  if the sender is not the ROOT (ROOT does not need to send the best value to himself)
     if (sender != ROOT && pid == sender)
     {
-        MPI_Send(&final_best_mutant, 1, mutant_type, ROOT, 0, MPI_COMM_WORLD);
+        MPI_Send(&mutant, 1, mutant_type, ROOT, 0, MPI_COMM_WORLD);
     }
-    
+
     if (pid == ROOT)
     {   
         MPI_Status status;
         if (sender != ROOT)     //  if ROOT process does not have the best score -> retrieve it from the process that does
         {
-            final_best_score = gloabl_best[0];        //  best score already sent to all processes by MPI_Allreduce
-    	    MPI_Recv(&final_best_mutant, 1, mutant_type, sender, 0, MPI_COMM_WORLD, &status);
+            score = gloabl_best[0];        //  best score already sent to all processes by MPI_Allreduce
+    	    MPI_Recv(&mutant, 1, mutant_type, sender, 0, MPI_COMM_WORLD, &status);
         }
         
         char mut[SEQ2_MAX_LEN];
         strcpy(mut, data.seq2);
-        mut[final_best_mutant.char_offset] = final_best_mutant.ch;
+        mut[mutant.char_offset] = mutant.ch;
 
     	FILE* out_file = fopen(OUTPUT_FILE, "w");
     	if (!out_file)
@@ -171,7 +104,7 @@ void initiate_program(int pid, int num_processes)
     		MPI_Abort(MPI_COMM_WORLD, 2);
 			exit(1);
     	}
-    	if (!write_results_to_file(out_file, mut, final_best_mutant.offset, final_best_score))
+    	if (!write_results_to_file(out_file, mut, mutant.offset, score))
     	{
     		printf("Error write to the output file %s\n", OUTPUT_FILE);
 			MPI_Abort(MPI_COMM_WORLD, 2);
@@ -179,13 +112,109 @@ void initiate_program(int pid, int num_processes)
     	}
     	fclose(out_file);
 
-#ifndef EVALUATION_MODE
-        if (cpu_tasks == 0) //  if the root CPU did not had any tasks, it's hashtable is empty, therefore, it will fill it now for printing
-            fill_hash(data.weights, pid);
-
-        pretty_print(&data, mut, final_best_mutant.offset, final_best_mutant.char_offset);
+#ifdef DEBUG_PRINT
+        pretty_print(&data, mut, mutant.offset, mutant.char_offset);
 #endif
     }
+
+    return time;
+}
+
+double divide_execute_tasks(ProgramData* data, int num_processes, int pid, Mutant* mt)
+{
+    int total_chars = strlen(data->seq2);
+    int total_offsets = strlen(data->seq1) - total_chars + 1;
+
+    int per_proc_offset = total_offsets / num_processes;
+
+    int first_offset = per_proc_offset * pid;  //  each process will handle the same amount of tasks, therefore, offset will be multiply by the process index
+    int last_offset = per_proc_offset + first_offset;
+    if (pid == num_processes - 1)    //  if the tasks do not divide by the number of processes, the last process will handle any additional tasks
+        last_offset += total_offsets % num_processes;
+
+    //  if amount of tasks greater than 50 percentage of max amount of tasks
+    //  running all the tasks on cuda will be faster than part with cuda and with openmp
+    double percentage = (double)total_chars * (double)total_offsets * 100;
+    percentage /= ((double)(SEQ2_MAX_LEN - 1) * (double)MAX_OFFSETS);
+    if (cuda_percentage == -1 && percentage >= 20)
+        cuda_percentage = 100;
+    else if (cuda_percentage == -1)
+        cuda_percentage = 0;
+        
+    int gpu_tasks = (last_offset - first_offset) * cuda_percentage / 100;
+    int gpu_first_offset = first_offset;
+    int gpu_last_offset = gpu_first_offset + gpu_tasks;
+
+    int cpu_tasks = (last_offset - first_offset) - gpu_tasks;
+    int cpu_first_offset = gpu_last_offset;
+    int cpu_last_offset = cpu_first_offset + cpu_tasks;
+
+    if (pid == ROOT)
+        printf("CUDA percentage set to %d\n", cuda_percentage);
+
+#ifdef DEBUG_PRINT
+    printf("pid %2d, total=%4d, per_proc=%4d, cuda start=%4d, cuda end=%4d, cpu start=%4d, cpu end=%4d\n",
+            pid,
+            total_tasks,
+            last_offset - first_offset,
+            gpu_first_offset,
+            gpu_last_offset,
+            cpu_first_offset,
+            cpu_last_offset);
+#endif
+
+    double gpu_best_score = data->is_max ? -INFINITY : INFINITY;
+    double cpu_best_score = data->is_max ? -INFINITY : INFINITY;
+    Mutant gpu_mutant = { -1, -1, NOT_FOUND_CHAR };
+    Mutant cpu_mutant = { -1, -1, NOT_FOUND_CHAR };
+    
+    if (cpu_tasks > 0)
+        fill_hash(data->weights, pid);
+
+#pragma omp parallel
+{
+    int num_threads = omp_get_num_threads();
+    int tid = omp_get_thread_num();
+    if (gpu_tasks > 0 && tid == ROOT)
+    {
+        gpu_best_score = gpu_run_program(data, &gpu_mutant, gpu_first_offset, gpu_last_offset);
+    }
+
+    if (cpu_tasks > 0)
+    {   
+        if (gpu_tasks > 0)      //  if the GPU had some tasks, the ROOT thread will be stuck until GPU will end its tasks
+        {                       //  therefore, only 3 threads in the CPU will handle the rest of the tasks
+            num_threads = 3;    
+            tid--;              //  downgrage each thread id, so the ROOT thread will become id=-1
+        }
+        if (tid != -1)
+        {
+            int tasks_per_thread = (cpu_last_offset - cpu_first_offset) / num_threads;          //  amount of tasks per thread
+            int thread_start = cpu_first_offset + tasks_per_thread * tid;                       //  each thread start offset
+            int thread_end = thread_start + tasks_per_thread;                                   //  each thread end offset
+            if ((cpu_last_offset - cpu_first_offset) % num_threads != 0 && tid == num_threads - 1)  //  if the last thread have some extra tasks
+                thread_end += (cpu_last_offset - cpu_first_offset) % num_threads;
+            find_best_mutant_cpu(pid, data, &cpu_mutant, thread_start, thread_end, &cpu_best_score);   //  execute each thread
+        }
+    }
+}
+
+#ifdef DEBUG_PRINT
+    printf("cpu tasks=%3d, cpu best score=%lf\ngpu tasks=%3d, gpu best score=%lf\n", cpu_tasks, cpu_best_score, gpu_tasks, gpu_best_score);
+    if (cpu_tasks == 0) //  if the root CPU did not had any tasks, it's hashtable is empty, therefore, it will fill it now for printing
+            fill_hash(data->weights, pid);
+#endif
+    Mutant final_best_mutant = gpu_mutant;                      //  save the GPU results
+    double final_best_score = gpu_best_score;
+    if ((data->is_max && cpu_best_score > gpu_best_score) ||     //  if the CPU found better mutation, replace it
+        (!data->is_max && cpu_best_score < gpu_best_score))
+    {
+        final_best_mutant = cpu_mutant;
+        final_best_score = cpu_best_score;
+    }
+
+    *mt = final_best_mutant;
+    return final_best_score;
 }
 
 

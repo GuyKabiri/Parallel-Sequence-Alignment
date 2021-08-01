@@ -7,7 +7,8 @@
 // #define PRINT_SIGN_MAT
 // #define DEBUG_PRINT
 
-void initiate_program(int pid, int num_processes);
+double initiate_program(int pid, int num_processes);
+double divide_execute_tasks(ProgramData* data, int num_processes, int pid, Mutant* mt);
 
 void find_best_mutant_cpu(int pid, ProgramData* data, Mutant* return_mutant, int first_offset, int last_offset, double* cpu_score);
 double find_best_mutant_offset(ProgramData* data, int offset, Mutant* mt);

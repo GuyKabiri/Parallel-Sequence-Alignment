@@ -35,6 +35,8 @@
 #define SEQ1_MAX_LEN 10000 + 1
 #define SEQ2_MAX_LEN 5000 + 1
 
+#define MAX_OFFSETS SEQ1_MAX_LEN - SEQ2_MAX_LEN + 1
+
 #define WEIGHTS_COUNT 4
 
 #define FUNC_NAME_LEN 8         //  len(maximum) = len(minimum) = 7 + '\0' = 8
@@ -42,8 +44,6 @@
 #define MINIMUM_STR "minimum"
 #define MAXIMUM_FUNC 1
 #define MINIMUM_FUNC 0
-
-// #define EVALUATION_MODE
 
 typedef unsigned int uint;
 
