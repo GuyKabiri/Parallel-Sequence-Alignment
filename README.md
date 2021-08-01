@@ -21,32 +21,9 @@ $$ S = N_{1} \times W_{1} - N_{2} \times W_{2} - N_{3} \times W_{3} - N_{4} \tim
 >   $ N_{i} $ represents the amount, and $ W_{i} $ represents the weight, respectively, of `*`, `:`, `.`, and `_`.
 
 ### ***Groups***
-<table>
-<tr>
-<td>Conservative Groups</td><td>Semi-Conservative Groups</td>
-</tr>
-<tr>
-<td>
-
-|	|	|	|
-|--|--|--|
-|NDEQ  | NEQK|	STA|
-|MILV | QHRK | NHQK|
-|FYW | HY |MILF |
-
-</td>
-<td>
-
-|	|	|	|	|
-|--|--|--|--|
-|SAG| ATV|	CSA|
-|SGND| STPA| STNK|
-|NEQHRK| NDEQHK|SNDEQK|
-| HFY| FVLIM|    |
-
-</td>
-</tr>
-</table>
+|Conservative Groups|Semi-Conservative Groups|
+|--|--|
+|<table><tr><td>NDEQ</td><td>NEQK</td><td>STA</td></tr><tr><td>MILV</td><td>QHRK</td><td>NHQK</td></tr><tr><td>FYW</td><td>HY</td><td>MILF</td></tr></table>|<table><tr><td>SAG</td><td>ATV</td><td>CSA</td></tr><tr><td>MSGNDILV</td><td>STPA</td><td>STNK</td></tr><tr><td>NEQHRK</td><td>NDEQHK</td><td>SNDEQK</td></tr><tr><td>HFY</td><td>FVLIM</td><td></td></tr></table>|
 
 
 An example of a pair-wise evaluation  
@@ -69,44 +46,28 @@ The similarity of two sequences `Seq1` and `Seq2` defined as followed:
 *	The Alignment Score is calculated according the pair-wise procedure described above.
 
 
-Examples:
-<table>
-<tr>
-<td>Sequences</td><td>Results</td>
-</tr>
-<tr>
-<td>
+Examples:  
 
+1. 
 ```
 LQRHKRTHTGEKPYEPSHLQYHERTHTGEKPYECHQCHQAFKKCSLLQRHKRTH
                      HERTHTGEKPYECHQCRTAFKKCSLLQRHK
                      ****************: ************
 ```
-</td>
-<td>
+>   Weights: 1.5 2.6 0.3 0.2  
+>   Offset: 21  
+>   Score: 39.2  
 
->   Weights: 1.5 2.6 0.3 0.2 <br />
->   Offset: 21<br />
->   Score: 39.2
-</td>
-</tr>
-<tr>
-<td>
 
+2. 
 ```
 ELMVRTNMYTONEWVFNVJERVMKLWEMVKL
    MSKDVMSDLKWEV
    : .:: :  :* .
 ```
-</td>
-<td>
-
->   Weights: 5 4 3 2<br />
->   Offset: 3<br />
+>   Weights: 5 4 3 2  
+>   Offset: 3  
 >   Score: -31
-</td>
-</tr>
-</table>
 
 
 ## ***Mutation***
@@ -127,8 +88,9 @@ Initially, a basic iterative solution was implemented. By iterating over the off
 Comparing each pair of letters to determine whether they are equal or fall into one of the conservative or semi-conservative groups, then finding their best substitutions (if possible).  
 Hence, save any better substitution found for a pair than the previous one.  
 The main objective of this project is to parallelize the CPU and GPU simultaneously, taking advantage of their maximum abilities.  
-At first, it is necessary to examine what can be parallelizing in this problem, which menas, what tasks are being done and do not depend on other tasks.  
-The program will aimed to run on 2 machine at the same time, which will involve in usin `MPI` for data sending between them.
+While the CPU tasks will be parallelized with `OpenMP`, the GPU tasks will be parallelized with `CUDA`.  
+It is first necessary to examine what can be parallelized in this problem, that is, what tasks are being performed independently of one another.  
+The program will run on two machines at the same time, which will require using `MPI` to send data between them.
 
 ### ***CPU Implementation***
 Having written the sequential solution, I realized it would be time-wasting to check whether each pair of letters belongs to a conservative or semi-conservative group several times during the run.  
@@ -211,8 +173,8 @@ Reduce an array with $ n $ elements requires the algorithm to calculate the ceil
 At the beginning of the algorithm, a $ m/_2 $ `stride` constant is defined.  
 For each iteration of the algorithm, every cell performs the reduced operation between itself ($ i $) and $ i + stide $. After each iteration, divide `stride` by 2.
 
-![](https://miro.medium.com/max/875/1*l1uoTZpQUW8YaSjFpcMNlw.png)  
-*As can see above, array size is $ 16 $, therefore `stride` will be $ 8 $, and the amount of iterations is $ log(16) = 4 $.*
+![](https://www.researchgate.net/profile/John-Steuben/publication/283708523/figure/fig5/AS:667787655643141@1536224392398/Illustration-of-the-optimized-parallel-reduce-algorithm.png)  
+*As can see above, array size is $ 16 $, therefore `stride` will be $ 8 $, and the amount of iterations is $ log(16) = 4 $. [Image source](https://www.researchgate.net/publication/283708523_Towards_Real-Time_Composite_Material_Characterization_Using_Surrogate_Models_and_GPGPU_Computing)*
 
 ## Dividing CPU and GPU tasks
 Run-time evaluations were performed on a number of configurations with multiple inputs:  
@@ -222,9 +184,11 @@ Run-time evaluations were performed on a number of configurations with multiple 
 *  Some OpenMP, some CUDA.  
 
 The following configuration was selected for the project based on the runtime of these configurations:  
+Parallelizing the CPU and GPU together, one of the CPU cores is used to initiate the GPU, while the other three cores are used for calculations.
 The separation of CUDA and OpenMP will not be more efficient than running the task with only CUDA if the number of tasks (number of offsets times number of letters to evaluate) exceeds 20% of the maximum possible tasks (25,005,000).  
 Furthermore, if the amount of tasks is small, it would be wasteful to allocate and copy memory over the GPU.  
-If the tasks are smaller than 20%, only OpenMP will handle them; otherwise, just the GPU.
+If the tasks are smaller than 20%, only OpenMP will handle them; otherwise, just the GPU.  
+A further explanation follows the complexity section.
 
 
 ## ***Complexity***
@@ -244,7 +208,15 @@ A reduction algorithm is run twice after evaluating the mutations. Initially, ea
 Having $n-m+1$ offsets, the complexity of the second reduction is $O(log(n-m))$.  
 All these operations are performed separately, combining all of them will produce complexity $O(1)+O(log(m))+O(log(n-m))$, resulting in $O(log(m))+O(log(n-m))$.  
 
+## ***Complexity and Configuration Summery***
 Because it is determined at runtime, and based on input, whether to allocate tasks to the CPU or GPU, the total complexity is $O(nm-m^2)+O(log(m))+O(log(n-m))$.
+This project does not run both CPU and GPU, even though it is implemented to do so:  
+At most, we will have $offsets \times letters = (n-m+1) \times m$.  
+Considering the maximum values of $n=10,000$ and $m=5,000$, CUDA can handle input with a complexity of $O(log(m))+O(log(n-m))$.  
+Thus, the maximum number of CUDA iterations in this project is limited to $O(log(5000))+O(log(5000))=25$ per thread.  
+With OpenMP, the complexity would be $O((n-m) \times m)$; since each thread handles a quarter of the offsets, this would result in $\frac{10,000-5,000}{4} \times 5,000=2,500 \times 5,000=6,250,000$ iterations per thread.  
+So, even when allocating and copying data into the GPU memory, it can handle big inputs very quickly.  
+While for a smaller input, allocating and copying data to the GPU would take more time than directing the fourth thread of the CPU to perform the calculations.
 
 
 ## ***How To Run***
@@ -263,7 +235,7 @@ Once the executable program is present on both machines and the file have been c
 mpiexec -np 2 -machinefile mf -map-by node ./{EXECUTABLE}
 ```
 *where `{EXECUTABLE}` is the name of the executable file.*  
-  
+
 
 The following can be run on a single machine:
 ```
