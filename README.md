@@ -10,7 +10,7 @@ Each pair of characters generates a special character that indicates the degree 
 The special characters are `*` (asterisk), `:` (colon), `.` (dot), and `_` (space).  
 The following definitions apply:  
 *   Equal characters will produce a `*`.
-*   If two characters are not equal, but present in the same conservative group, they will produce a `*` sign.
+*   If two characters are not equal, but present in the same conservative group, they will produce a `:` sign.
 *   If characters of a pair are not in the same conservative group but are in a semi-conservative group, then they will produce a `.`.
 *   If none of the above is true, the characters will result in a `_` sign.
 

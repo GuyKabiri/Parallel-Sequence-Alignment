@@ -2,7 +2,7 @@
 <html>
 <head><meta charset="utf-8" />
 
-<title>README</title>
+<title>Parallel Sequence Alignment - README</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
@@ -12996,8 +12996,10 @@ ul.typeahead-list  > li > a.pull-right {
 .highlight .mh { color: #666666 } /* Literal.Number.Hex */
 .highlight .mi { color: #666666 } /* Literal.Number.Integer */
 .highlight .mo { color: #666666 } /* Literal.Number.Oct */
+.highlight .sa { color: #BA2121 } /* Literal.String.Affix */
 .highlight .sb { color: #BA2121 } /* Literal.String.Backtick */
 .highlight .sc { color: #BA2121 } /* Literal.String.Char */
+.highlight .dl { color: #BA2121 } /* Literal.String.Delimiter */
 .highlight .sd { color: #BA2121; font-style: italic } /* Literal.String.Doc */
 .highlight .s2 { color: #BA2121 } /* Literal.String.Double */
 .highlight .se { color: #BB6622; font-weight: bold } /* Literal.String.Escape */
@@ -13008,9 +13010,11 @@ ul.typeahead-list  > li > a.pull-right {
 .highlight .s1 { color: #BA2121 } /* Literal.String.Single */
 .highlight .ss { color: #19177C } /* Literal.String.Symbol */
 .highlight .bp { color: #008000 } /* Name.Builtin.Pseudo */
+.highlight .fm { color: #0000FF } /* Name.Function.Magic */
 .highlight .vc { color: #19177C } /* Name.Variable.Class */
 .highlight .vg { color: #19177C } /* Name.Variable.Global */
 .highlight .vi { color: #19177C } /* Name.Variable.Instance */
+.highlight .vm { color: #19177C } /* Name.Variable.Magic */
 .highlight .il { color: #666666 } /* Literal.Number.Integer.Long */
     </style>
 <style type="text/css">
@@ -13085,7 +13089,7 @@ div#notebook {
 
 <!-- Loading mathjax macro -->
 <!-- Load mathjax -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS_HTML"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS_HTML"></script>
     <!-- MathJax configuration -->
     <script type="text/x-mathjax-config">
     MathJax.Hub.Config({
@@ -13143,7 +13147,7 @@ The special characters are <code>*</code> (asterisk), <code>:</code> (colon), <c
 The following definitions apply:</p>
 <ul>
 <li>Equal characters will produce a <code>*</code>.</li>
-<li>If two characters are not equal, but present in the same conservative group, they will produce a <code>*</code> sign.</li>
+<li>If two characters are not equal, but present in the same conservative group, they will produce a <code>:</code> sign.</li>
 <li>If characters of a pair are not in the same conservative group but are in a semi-conservative group, then they will produce a <code>.</code>.</li>
 <li>If none of the above is true, the characters will result in a <code>_</code> sign.</li>
 </ul>
@@ -13207,12 +13211,10 @@ _*:.***_******.:</code></pre>
   Score: 39.2</p>
 </blockquote>
 </li>
-</ol>
-<ol>
 <li>
 <pre><code>ELMVRTNMYTONEWVFNVJERVMKLWEMVKL
-MSKDVMSDLKWEV
-: .:: :  :* .</code></pre>
+   MSKDVMSDLKWEV
+   : .:: :  :* .</code></pre>
 <blockquote><p>Weights: 5 4 3 2<br>
   Offset: 3<br>
   Score: -31</p>
